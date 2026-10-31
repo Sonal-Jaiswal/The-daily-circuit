@@ -3,5 +3,5 @@
   "framework": "nextjs",
   "installCommand": "cd ../.. && npm ci",
   "buildCommand": "cd ../.. && npm run vercel-build",
-  "regions": ["bom1"]
+  "regions": ["sin1"]
 }

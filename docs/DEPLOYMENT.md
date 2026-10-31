@@ -1,10 +1,10 @@
 # Deployment guide
 
-Target: **Vercel** (website, region `bom1` Mumbai) · **Render or Railway** (worker) · **Neon** (PostgreSQL, `aws-ap-south-1`) · **Cloudflare** (DNS) · **Anthropic** · **Resend** (email).
+Target: **Vercel** (website, region `sin1` Singapore) · **Render or Railway** (worker) · **Neon** (PostgreSQL, `aws-ap-southeast-1` Singapore) · **Cloudflare** (DNS) · **Anthropic** · **Resend** (email).
 
 ## 1. Database (Neon)
 
-1. Create a project in region **AWS Asia Pacific (Mumbai)**, PostgreSQL 17.
+1. Create a project in region **AWS Asia Pacific (Singapore)** (Mumbai is not offered to every Neon organisation; Singapore is the nearest).
 2. Copy two connection strings:
    * `DATABASE_URL`: the **pooled** string (host contains `-pooler`), with `sslmode=require`.
    * `DIRECT_DATABASE_URL`: the direct string, used only for migrations.

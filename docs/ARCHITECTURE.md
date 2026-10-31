@@ -3,7 +3,7 @@
 ## Components
 
 ```
-                ┌──────────────────────── Vercel (bom1) ────────────────────────┐
+                ┌──────────────────────── Vercel (sin1) ────────────────────────┐
  readers ──────▶│ apps/web  Next.js 16 (Cache Components)                       │
                 │  • public site: static shells, tag "content" revalidated       │
  editors ──────▶│  • /admin dashboard (session cookie, RBAC, server actions)     │
@@ -13,7 +13,7 @@
                                 │ POST /api/internal/revalidate (Bearer secret)
                 ┌───────────────┴───────────┐               │ Prisma (pooled)
                 │ apps/worker (Render/Railway)│              ▼
-                │  • scheduler tick (IST)    │──────▶ PostgreSQL (Neon, Mumbai)
+                │  • scheduler tick (IST)    │──────▶ PostgreSQL (Neon, Singapore)
                 │  • job queue runner        │       JobExecution = durable queue
                 │  • /health                 │
                 └──────┬─────────────┬───────┘
