@@ -105,6 +105,8 @@ export function planPipeline(input: {
       planned.push({ type: "COLLECT", editionDate, idempotencyKey: scheduledKey("COLLECT", editionDate), runAfter: now });
       continue;
     }
+    // A skipped (missed) edition stays skipped; its later stages never run.
+    if (byType.get("COLLECT")?.status === "SKIPPED") continue;
 
     for (let i = 1; i < PIPELINE.length; i += 1) {
       const stage = PIPELINE[i]!;

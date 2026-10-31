@@ -2,7 +2,7 @@ import type { DailyEdition, PrismaClient } from "@tdc/db";
 import { adminAlertRecipients, getEnv, siteUrl } from "../../env";
 import { articleUrl, deskForSection, editionPath, sectionInfo } from "../../content/paths";
 import { adminReportEmail, dailyDigestEmail } from "../../email/templates";
-import { unsubscribeUrl } from "../../newsletter/service";
+import { oneClickUnsubscribeUrl, unsubscribeUrl } from "../../newsletter/service";
 import { validateArticle } from "../../publishing/articles";
 import { formatIstDate, istWallTimeToUtc, toDbDate } from "../../time/ist";
 import type { PipelineContext, StageResult } from "../context";
@@ -194,6 +194,7 @@ export async function postPublishStage(ctx: PipelineContext): Promise<StageResul
             editionUrl: `${siteUrl()}${editionPath(ctx.editionDate)}`,
             articles: articles.map((a) => ({ headline: a.headline, excerpt: a.excerpt, url: articleUrl(a), sectionName: sectionInfo(a.section).name })),
             unsubscribeUrl: unsubscribeUrl(s.id),
+            oneClickUnsubscribeUrl: oneClickUnsubscribeUrl(s.id),
           }),
         );
         await ctx.prisma.newsletterSubscriber.update({ where: { id: s.id }, data: { lastSentAt: ctx.now() } });

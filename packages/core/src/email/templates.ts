@@ -34,7 +34,7 @@ export interface DigestArticle {
   sectionName: string;
 }
 
-export function dailyDigestEmail(input: { to: string; siteName: string; editionTitle: string; editionUrl: string; articles: DigestArticle[]; unsubscribeUrl: string }): EmailMessage {
+export function dailyDigestEmail(input: { to: string; siteName: string; editionTitle: string; editionUrl: string; articles: DigestArticle[]; unsubscribeUrl: string; oneClickUnsubscribeUrl: string }): EmailMessage {
   const items = input.articles
     .map(
       (a) =>
@@ -52,7 +52,7 @@ export function dailyDigestEmail(input: { to: string; siteName: string; editionT
     subject: input.editionTitle,
     html,
     text,
-    headers: { "List-Unsubscribe": `<${input.unsubscribeUrl}>`, "List-Unsubscribe-Post": "List-Unsubscribe=One-Click" },
+    headers: { "List-Unsubscribe": `<${input.oneClickUnsubscribeUrl}>`, "List-Unsubscribe-Post": "List-Unsubscribe=One-Click" },
   };
 }
 

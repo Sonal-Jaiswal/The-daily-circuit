@@ -1,0 +1,46 @@
+# Render Blueprint for the background worker. The website runs on Vercel.
+# Render → New → Blueprint → select this repository. Secrets are entered in the dashboard.
+services:
+  - type: worker
+    name: daily-circuit-worker
+    runtime: docker
+    dockerfilePath: ./apps/worker/Dockerfile
+    dockerContext: .
+    plan: starter # background workers have no free tier; ~US$7/month
+    region: singapore
+    numInstances: 1
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: DATABASE_URL
+        sync: false
+      - key: DIRECT_DATABASE_URL
+        sync: false
+      - key: DATABASE_POOL_MAX
+        value: "5"
+      - key: NEXT_PUBLIC_SITE_URL
+        sync: false
+      - key: WEB_INTERNAL_URL
+        sync: false
+      - key: SESSION_SECRET
+        sync: false
+      - key: INTERNAL_JOB_SECRET
+        sync: false
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: CLAUDE_WRITER_MODEL
+        value: claude-sonnet-5-5
+      - key: CLAUDE_CLASSIFIER_MODEL
+        value: claude-haiku-5-5
+      - key: EMAIL_TRANSPORT
+        value: resend
+      - key: RESEND_API_KEY
+        sync: false
+      - key: EMAIL_FROM
+        sync: false
+      - key: ADMIN_ALERT_EMAILS
+        sync: false
+      - key: MARKET_DATA_PROVIDER
+        value: none
+      - key: LOG_LEVEL
+        value: info

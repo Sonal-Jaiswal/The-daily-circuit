@@ -78,6 +78,10 @@ describe("pipeline schedule planner", () => {
     expect(p[0]?.skipReason).toMatch(/did not start/);
   });
 
+  it("never runs later stages of an edition that was skipped", () => {
+    expect(plan(ist(D, "23:30"), execs(D, [["COLLECT", "SKIPPED"]]))).toEqual([]);
+  });
+
   it("follows a configured publish time", () => {
     expect(plan(ist(D, "20:00"), new Map(), "22:30")).toEqual([]);
     expect(plan(ist(D, "21:30"), new Map(), "22:30")[0]?.type).toBe("COLLECT");

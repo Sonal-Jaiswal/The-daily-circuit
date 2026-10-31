@@ -26,6 +26,11 @@ export function unsubscribeUrl(subscriberId: string): string {
   return `${siteUrl()}/newsletter/unsubscribe?token=${encodeURIComponent(unsubscribeToken(subscriberId))}`;
 }
 
+/** RFC 8058 endpoint for mail clients' one-click unsubscribe (POST, no page). */
+export function oneClickUnsubscribeUrl(subscriberId: string): string {
+  return `${siteUrl()}/api/newsletter/unsubscribe?token=${encodeURIComponent(unsubscribeToken(subscriberId))}`;
+}
+
 export type SubscribeOutcome = "confirmation_sent" | "already_confirmed";
 
 /**

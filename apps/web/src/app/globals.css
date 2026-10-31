@@ -1,0 +1,193 @@
+@import "tailwindcss";
+
+@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
+
+/*
+ * The Daily Circuit — design tokens.
+ * Paper and ink in a cool indigo cast; neel (indigo) marks the AI desk, marigold marks the
+ * markets desk. Up/down colours are functional only.
+ */
+:root {
+  --paper: #f4f6fa;
+  --surface: #ffffff;
+  --ink: #161a33;
+  --ink-2: #3d4363;
+  --ink-3: #636a8a;
+  --rule: #dde1ec;
+  --neel: #2f3a8f;
+  --neel-soft: #e6e8f7;
+  --marigold: #c98a0b;
+  --marigold-ink: #87590a;
+  --marigold-soft: #fbf0d9;
+  --up: #0f7a4a;
+  --down: #b42318;
+  --focus: #2f3a8f;
+  color-scheme: light;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --paper: #0f1226;
+    --surface: #161a33;
+    --ink: #e8eaf4;
+    --ink-2: #b7bcd6;
+    --ink-3: #8f95b5;
+    --rule: #2a2f52;
+    --neel: #a3acf7;
+    --neel-soft: #232a5c;
+    --marigold: #e9b54a;
+    --marigold-ink: #e9b54a;
+    --marigold-soft: #3a2c0c;
+    --up: #4cc38a;
+    --down: #f07167;
+    --focus: #a3acf7;
+    color-scheme: dark;
+  }
+}
+
+:root[data-theme="dark"] {
+  --paper: #0f1226;
+  --surface: #161a33;
+  --ink: #e8eaf4;
+  --ink-2: #b7bcd6;
+  --ink-3: #8f95b5;
+  --rule: #2a2f52;
+  --neel: #a3acf7;
+  --neel-soft: #232a5c;
+  --marigold: #e9b54a;
+  --marigold-ink: #e9b54a;
+  --marigold-soft: #3a2c0c;
+  --up: #4cc38a;
+  --down: #f07167;
+  --focus: #a3acf7;
+  color-scheme: dark;
+}
+
+@theme inline {
+  --color-paper: var(--paper);
+  --color-surface: var(--surface);
+  --color-ink: var(--ink);
+  --color-ink-2: var(--ink-2);
+  --color-ink-3: var(--ink-3);
+  --color-rule: var(--rule);
+  --color-neel: var(--neel);
+  --color-neel-soft: var(--neel-soft);
+  --color-marigold: var(--marigold);
+  --color-marigold-ink: var(--marigold-ink);
+  --color-marigold-soft: var(--marigold-soft);
+  --color-up: var(--up);
+  --color-down: var(--down);
+
+  /* shadcn/ui token names, mapped onto the brand palette (used by the admin UI) */
+  --color-background: var(--paper);
+  --color-foreground: var(--ink);
+  --color-card: var(--surface);
+  --color-card-foreground: var(--ink);
+  --color-primary: var(--neel);
+  --color-primary-foreground: var(--surface);
+  --color-muted: var(--neel-soft);
+  --color-muted-foreground: var(--ink-3);
+  --color-border: var(--rule);
+  --color-input: var(--rule);
+  --color-ring: var(--focus);
+  --color-destructive: var(--down);
+
+  --font-sans: var(--font-grotesk), ui-sans-serif, system-ui, sans-serif;
+  --font-serif: var(--font-newsreader), ui-serif, Georgia, serif;
+
+  --radius-sm: 4px;
+  --radius-md: 8px;
+  --radius-lg: 14px;
+}
+
+@layer base {
+  html {
+    -webkit-text-size-adjust: 100%;
+    text-rendering: optimizeLegibility;
+  }
+  body {
+    background: var(--paper);
+    color: var(--ink);
+    font-family: var(--font-sans);
+    font-feature-settings: "ss01", "cv11";
+  }
+  ::selection {
+    background: var(--neel-soft);
+    color: var(--ink);
+  }
+  :focus-visible {
+    outline: 2px solid var(--focus);
+    outline-offset: 2px;
+    border-radius: 2px;
+  }
+  .tabular {
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+/* Long-form reading text: Newsreader at a comfortable measure. */
+@layer components {
+  .prose-article {
+    font-family: var(--font-serif);
+    font-size: 1.1875rem;
+    line-height: 1.72;
+    color: var(--ink);
+    max-width: 40rem;
+  }
+  .prose-article p {
+    margin: 0 0 1.25em;
+  }
+  .prose-article h2,
+  .prose-article h3 {
+    font-family: var(--font-sans);
+    font-weight: 700;
+    letter-spacing: -0.012em;
+    line-height: 1.25;
+    margin: 2em 0 0.6em;
+  }
+  .prose-article h2 {
+    font-size: 1.5rem;
+  }
+  .prose-article h3 {
+    font-size: 1.25rem;
+  }
+  .prose-article ul,
+  .prose-article ol {
+    margin: 0 0 1.25em;
+    padding-left: 1.25em;
+  }
+  .prose-article ul {
+    list-style: disc;
+  }
+  .prose-article ol {
+    list-style: decimal;
+  }
+  .prose-article li {
+    margin: 0.35em 0;
+  }
+  .prose-article a {
+    color: var(--neel);
+    text-decoration: underline;
+    text-underline-offset: 3px;
+    text-decoration-thickness: 1px;
+  }
+  .cite {
+    font-family: var(--font-sans);
+    font-size: 0.68em;
+    font-weight: 600;
+    vertical-align: super;
+    line-height: 0;
+    margin-left: 1px;
+    color: var(--neel);
+    text-decoration: none !important;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}

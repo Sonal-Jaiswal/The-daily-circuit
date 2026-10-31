@@ -1,0 +1,56 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: tdc
+          POSTGRES_PASSWORD: tdc_local_dev
+          POSTGRES_DB: tdc
+        ports: ["54329:5432"]
+        options: >-
+          --health-cmd "pg_isready -U tdc" --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      DATABASE_URL: postgresql://tdc:tdc_local_dev@localhost:54329/tdc
+      TEST_DATABASE_URL: postgresql://tdc:tdc_local_dev@localhost:54329/tdc_test
+      E2E_DATABASE_URL: postgresql://tdc:tdc_local_dev@localhost:54329/tdc_e2e
+      SESSION_SECRET: ci-session-secret-0123456789abcdefghijklmnop
+      NEXT_PUBLIC_SITE_URL: http://localhost:3000
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - name: Create test databases
+        run: |
+          PGPASSWORD=tdc_local_dev psql -h localhost -p 54329 -U tdc -c "CREATE DATABASE tdc_test;"
+          PGPASSWORD=tdc_local_dev psql -h localhost -p 54329 -U tdc -c "CREATE DATABASE tdc_e2e;"
+      - run: npm run db:deploy && npm run db:seed
+      - run: npm run typecheck
+      - run: npm run lint
+      - run: npm run test -w @tdc/core
+      - run: npm run build -w @tdc/worker
+      - run: npx playwright install --with-deps chromium
+      - run: npm run test:e2e
+        env:
+          CI: "1"
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: playwright-report
+          path: test-results
