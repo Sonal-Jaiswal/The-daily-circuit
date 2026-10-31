@@ -1,0 +1,32 @@
+node_modules/
+.next/
+out/
+dist/
+coverage/
+*.tsbuildinfo
+next-env.d.ts
+
+# Prisma generated client
+packages/db/src/generated/
+
+# Environment files — never commit secrets
+.env
+.env.*
+!.env.example
+
+# Test artefacts
+playwright-report/
+test-results/
+blob-report/
+.playwright/
+
+# OS / editor
+.DS_Store
+.vscode/*
+!.vscode/extensions.json
+.idea/
+*.log
+npm-debug.log*
+
+# Deploy tooling
+.vercel

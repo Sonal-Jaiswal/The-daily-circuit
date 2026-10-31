@@ -1,0 +1,626 @@
+// The Daily Circuit — PostgreSQL schema.
+// All timestamps are stored in UTC (timestamptz). Editorial dates (edition dates)
+// are stored as calendar dates in Asia/Kolkata, as `@db.Date`.
+
+generator client {
+  provider     = "prisma-client"
+  output       = "../src/generated/prisma"
+  moduleFormat = "esm"
+  importFileExtension = ""
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ─────────────────────────────────────────────────────────────── enums
+
+enum Role {
+  ADMIN
+  EDITOR
+  VIEWER
+}
+
+/// Public sections of the publication. Each maps to a URL prefix.
+enum Section {
+  AI
+  TECHNOLOGY
+  MARKETS
+  IPO
+}
+
+/// The two daily quotas. AI + Technology share the AI quota; Markets + IPO share the market quota.
+enum Desk {
+  AI
+  MARKETS
+}
+
+enum ArticleStatus {
+  DRAFT
+  NEEDS_REVIEW
+  APPROVED
+  PUBLISHED
+  REJECTED
+  FAILED
+  ARCHIVED
+}
+
+enum ArticleKind {
+  NEWS
+  ANALYSIS
+  STOCK_MOVER
+  EXPLAINER
+}
+
+enum CandidateStatus {
+  NEW
+  DUPLICATE
+  CLASSIFIED
+  IRRELEVANT
+  STALE
+  SELECTED
+  NOT_SELECTED
+  USED
+}
+
+enum PublishedAtSource {
+  FEED_PUBLISHED
+  FEED_UPDATED
+  PAGE_METADATA
+  UNKNOWN
+}
+
+enum SourceType {
+  RSS
+  ATOM
+}
+
+enum SourceKind {
+  OFFICIAL
+  COMPANY
+  REGULATOR
+  EXCHANGE
+  PUBLISHER
+  WIRE
+}
+
+enum JobType {
+  COLLECT
+  PROCESS
+  RANK
+  GENERATE
+  VALIDATE
+  PREPARE_EDITION
+  PUBLISH
+  POST_PUBLISH
+  MARKET_SNAPSHOT
+}
+
+enum JobStatus {
+  QUEUED
+  RUNNING
+  SUCCEEDED
+  PARTIAL
+  FAILED
+  SKIPPED
+  CANCELLED
+}
+
+enum JobTrigger {
+  SCHEDULE
+  MANUAL
+  RETRY
+}
+
+enum EditionStatus {
+  PREPARING
+  READY
+  PUBLISHED
+  PARTIAL
+  EMPTY
+  FAILED
+}
+
+enum SubscriberStatus {
+  PENDING
+  CONFIRMED
+  UNSUBSCRIBED
+}
+
+enum InstrumentType {
+  INDEX
+  EQUITY
+}
+
+enum ActorType {
+  USER
+  SYSTEM
+}
+
+// ─────────────────────────────────────────────────────────────── people
+
+model User {
+  id           String    @id @default(uuid()) @db.Uuid
+  email        String    @unique
+  name         String
+  passwordHash String
+  role         Role      @default(EDITOR)
+  isActive     Boolean   @default(true)
+  lastLoginAt  DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  sessions        Session[]
+  auditLogs       AuditLog[]
+  reviewedArticles Article[]      @relation("ArticleReviewer")
+  requestedJobs   JobExecution[]
+  settingsUpdates SiteSettings[]
+}
+
+model Session {
+  id         String   @id @default(uuid()) @db.Uuid
+  /// SHA-256 of the opaque session token. The raw token only ever lives in the cookie.
+  tokenHash  String   @unique
+  userId     String   @db.Uuid
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt  DateTime
+  lastSeenAt DateTime @default(now())
+  ipHash     String?
+  userAgent  String?
+  createdAt  DateTime @default(now())
+
+  @@index([userId])
+  @@index([expiresAt])
+}
+
+/// Public byline. Automated desks are disclosed as automated; they are never presented as human reporters.
+model Author {
+  id          String    @id @default(uuid()) @db.Uuid
+  slug        String    @unique
+  name        String
+  role        String
+  bio         String
+  isAutomated Boolean   @default(true)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  articles    Article[]
+}
+
+// ─────────────────────────────────────────────────────────────── taxonomy
+
+model Category {
+  id          String    @id @default(uuid()) @db.Uuid
+  slug        String    @unique
+  name        String
+  description String
+  section     Section   @unique
+  desk        Desk
+  sortOrder   Int       @default(0)
+  isActive    Boolean   @default(true)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  articles    Article[]
+}
+
+model Tag {
+  id        String       @id @default(uuid()) @db.Uuid
+  slug      String       @unique
+  name      String
+  createdAt DateTime     @default(now())
+  articles  ArticleTag[]
+}
+
+model ArticleTag {
+  articleId String  @db.Uuid
+  tagId     String  @db.Uuid
+  article   Article @relation(fields: [articleId], references: [id], onDelete: Cascade)
+  tag       Tag     @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@id([articleId, tagId])
+  @@index([tagId])
+}
+
+// ─────────────────────────────────────────────────────────────── sources & candidates
+
+model NewsSource {
+  id                   String     @id @default(uuid()) @db.Uuid
+  slug                 String     @unique
+  name                 String
+  type                 SourceType @default(RSS)
+  kind                 SourceKind
+  desk                 Desk
+  feedUrl              String     @unique
+  homepageUrl          String
+  /// 0..1 editorial reliability weighting used by the ranking model.
+  reliability          Float      @default(0.7)
+  isEnabled            Boolean    @default(true)
+  /// Licensing / terms notes for this source. Shown in the admin dashboard.
+  termsNote            String?
+  requiresLicenseReview Boolean   @default(false)
+  maxItemsPerFetch     Int        @default(50)
+  etag                 String?
+  lastModified         String?
+  lastFetchedAt        DateTime?
+  lastSuccessAt        DateTime?
+  lastStatus           String?
+  lastError            String?
+  consecutiveFailures  Int        @default(0)
+  createdAt            DateTime   @default(now())
+  updatedAt            DateTime   @updatedAt
+
+  candidates NewsCandidate[]
+
+  @@index([desk, isEnabled])
+}
+
+/// One event, potentially reported by several sources.
+model StoryCluster {
+  id          String          @id @default(uuid()) @db.Uuid
+  desk        Desk
+  editionDate DateTime        @db.Date
+  title       String
+  /// Event signature produced during classification (e.g. "rbi-repo-rate-decision-2026-10").
+  signature   String?
+  sourceCount Int             @default(1)
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+  candidates  NewsCandidate[]
+  article     Article?
+
+  @@index([editionDate, desk])
+}
+
+model NewsCandidate {
+  id                 String            @id @default(uuid()) @db.Uuid
+  sourceId           String            @db.Uuid
+  source             NewsSource        @relation(fields: [sourceId], references: [id], onDelete: Cascade)
+  originalUrl        String
+  canonicalUrl       String            @unique
+  guid               String?
+  originalHeadline   String
+  normalizedHeadline String
+  feedSummary        String?
+  /// Original publication time as stated by the source. Null if the source did not state one.
+  publishedAt        DateTime?
+  publishedAtSource  PublishedAtSource @default(UNKNOWN)
+  /// Feed-level "updated" time, kept separately so it is never mistaken for publication time.
+  feedUpdatedAt      DateTime?
+  collectedAt        DateTime          @default(now())
+  desk               Desk
+  section            Section?
+  editionDate        DateTime          @db.Date
+  status             CandidateStatus   @default(NEW)
+  duplicateOfId      String?           @db.Uuid
+  clusterId          String?           @db.Uuid
+  cluster            StoryCluster?     @relation(fields: [clusterId], references: [id], onDelete: SetNull)
+  isClusterPrimary   Boolean           @default(false)
+  isOriginalReporting Boolean?
+  /// Structured facts extracted from the feed item and classification step.
+  extractedFacts     Json?
+  classification     Json?
+  sourceReliability  Float
+  importanceScore    Float?
+  credibilityScore   Float?
+  freshnessScore     Float?
+  impactScore        Float?
+  interestScore      Float?
+  totalScore         Float?
+  rankPosition       Int?
+  rankingExplanation String?
+  createdAt          DateTime          @default(now())
+  updatedAt          DateTime          @updatedAt
+
+  articleSources ArticleSource[]
+
+  @@index([editionDate, desk, status])
+  @@index([clusterId])
+  @@index([sourceId, publishedAt])
+}
+
+// ─────────────────────────────────────────────────────────────── articles
+
+model Article {
+  id                 String        @id @default(uuid()) @db.Uuid
+  slug               String        @unique
+  status             ArticleStatus @default(DRAFT)
+  kind               ArticleKind   @default(NEWS)
+  section            Section
+  categoryId         String        @db.Uuid
+  category           Category      @relation(fields: [categoryId], references: [id])
+  authorId           String        @db.Uuid
+  author             Author        @relation(fields: [authorId], references: [id])
+  editionId          String?       @db.Uuid
+  edition            DailyEdition? @relation(fields: [editionId], references: [id], onDelete: SetNull)
+  clusterId          String?       @unique @db.Uuid
+  cluster            StoryCluster? @relation(fields: [clusterId], references: [id], onDelete: SetNull)
+  /// Guards against generating/publishing the same story twice (e.g. "2026-11-01:cluster:<id>").
+  idempotencyKey     String        @unique
+
+  headline           String
+  excerpt            String
+  introduction       String
+  /// Main article body as restricted Markdown (paragraphs, ### subheads, lists, links).
+  body               String
+  context            String
+  whyItMatters       String
+  keyFacts           Json
+  implications       String
+  risks              String
+  seoTitle           String
+  seoDescription     String
+  imageAlt           String
+  /// Optional properly licensed image. Without it, the generative cover is used.
+  imageUrl           String?
+  imageCredit        String?
+  imageLicense       String?
+  readingTimeMinutes Int
+  /// Market articles: the rendered disclaimer is mandatory.
+  disclaimerRequired Boolean       @default(false)
+  requiresHumanReview Boolean      @default(false)
+  reviewFlags        String[]      @default([])
+  validationReport   Json?
+  /// Writer metadata needed to re-validate after edits (confirmed/unconfirmed claims, sources used…).
+  generationMeta     Json?
+  generatedByModel   String?
+  promptVersion      String?
+  reviewedById       String?       @db.Uuid
+  reviewedBy         User?         @relation("ArticleReviewer", fields: [reviewedById], references: [id], onDelete: SetNull)
+  reviewedAt         DateTime?
+  rejectionReason    String?
+
+  scheduledFor       DateTime?
+  publishedAt        DateTime?
+  /// Last time the visible content changed after publication.
+  contentModifiedAt  DateTime?
+  viewCount          Int           @default(0)
+  createdAt          DateTime      @default(now())
+  updatedAt          DateTime      @updatedAt
+
+  sources    ArticleSource[]
+  tags       ArticleTag[]
+  stocks     StockSnapshot[]
+  dailyStats ArticleDailyStat[]
+  apiUsage   ApiUsage[]
+
+  @@index([status, publishedAt(sort: Desc)])
+  @@index([section, status, publishedAt(sort: Desc)])
+  @@index([editionId])
+}
+
+model ArticleSource {
+  id            String         @id @default(uuid()) @db.Uuid
+  articleId     String         @db.Uuid
+  article       Article        @relation(fields: [articleId], references: [id], onDelete: Cascade)
+  candidateId   String?        @db.Uuid
+  candidate     NewsCandidate? @relation(fields: [candidateId], references: [id], onDelete: SetNull)
+  url           String
+  title         String
+  publisherName String
+  publishedAt   DateTime?
+  /// Marker used in the article text, e.g. "S1".
+  citationId    String?
+  /// Private copy of the permitted source text, used only to re-verify claims after edits. Never rendered.
+  verificationText String?
+  isPrimary     Boolean        @default(false)
+  accessedAt    DateTime       @default(now())
+  sortOrder     Int            @default(0)
+
+  @@unique([articleId, url])
+  @@index([candidateId])
+}
+
+model ArticleDailyStat {
+  articleId String   @db.Uuid
+  article   Article  @relation(fields: [articleId], references: [id], onDelete: Cascade)
+  date      DateTime @db.Date
+  views     Int      @default(0)
+
+  @@id([articleId, date])
+  @@index([date])
+}
+
+model DailyEdition {
+  id           String        @id @default(uuid()) @db.Uuid
+  /// Calendar date in Asia/Kolkata. One edition per day.
+  editionDate  DateTime      @unique @db.Date
+  status       EditionStatus @default(PREPARING)
+  title        String
+  summary      String?
+  aiCount      Int           @default(0)
+  marketCount  Int           @default(0)
+  stats        Json?
+  scheduledFor DateTime
+  publishedAt  DateTime?
+  reportSentAt DateTime?
+  digestSentAt DateTime?
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+  articles     Article[]
+}
+
+// ─────────────────────────────────────────────────────────────── market data
+
+model StockSnapshot {
+  id               String         @id @default(uuid()) @db.Uuid
+  provider         String
+  exchange         String
+  symbol           String
+  companyName      String
+  instrumentType   InstrumentType @default(EQUITY)
+  sector           String?
+  lastPrice        Decimal        @db.Decimal(14, 4)
+  previousClose    Decimal        @db.Decimal(14, 4)
+  changePercent    Decimal        @db.Decimal(9, 4)
+  volume           BigInt?
+  /// Timestamp reported by the data provider (not our fetch time).
+  dataTimestamp    DateTime
+  fetchedAt        DateTime       @default(now())
+  editionDate      DateTime       @db.Date
+  /// Only set when a cited source explains the move.
+  movementReason   String?
+  reasonVerified   Boolean        @default(false)
+  articleId        String?        @db.Uuid
+  article          Article?       @relation(fields: [articleId], references: [id], onDelete: SetNull)
+
+  @@unique([provider, exchange, symbol, dataTimestamp])
+  @@index([editionDate, instrumentType])
+  @@index([symbol, dataTimestamp(sort: Desc)])
+}
+
+// ─────────────────────────────────────────────────────────────── automation
+
+model JobExecution {
+  id             String       @id @default(uuid()) @db.Uuid
+  type           JobType
+  status         JobStatus    @default(QUEUED)
+  trigger        JobTrigger   @default(SCHEDULE)
+  editionDate    DateTime?    @db.Date
+  /// Scheduled runs use "<TYPE>:<editionDate>" so each stage runs once per edition, even with several workers.
+  idempotencyKey String?      @unique
+  payload        Json?
+  result         Json?
+  error          String?
+  attempts       Int          @default(0)
+  maxAttempts    Int          @default(3)
+  runAfter       DateTime     @default(now())
+  lockedBy       String?
+  lockedAt       DateTime?
+  heartbeatAt    DateTime?
+  startedAt      DateTime?
+  finishedAt     DateTime?
+  requestedById  String?      @db.Uuid
+  requestedBy    User?        @relation(fields: [requestedById], references: [id], onDelete: SetNull)
+  parentId       String?      @db.Uuid
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  logs     JobLog[]
+  apiUsage ApiUsage[]
+
+  @@index([status, runAfter])
+  @@index([type, editionDate])
+  @@index([createdAt(sort: Desc)])
+}
+
+model JobLog {
+  id        String       @id @default(uuid()) @db.Uuid
+  jobId     String       @db.Uuid
+  job       JobExecution @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  level     String
+  message   String
+  data      Json?
+  createdAt DateTime     @default(now())
+
+  @@index([jobId, createdAt])
+}
+
+/// Every Claude API call, for usage inspection and spend monitoring.
+model ApiUsage {
+  id               String        @id @default(uuid()) @db.Uuid
+  provider         String        @default("anthropic")
+  model            String
+  purpose          String
+  inputTokens      Int
+  outputTokens     Int
+  cacheReadTokens  Int           @default(0)
+  cacheWriteTokens Int           @default(0)
+  costUsd          Decimal       @db.Decimal(12, 6)
+  stopReason       String?
+  requestId        String?
+  jobId            String?       @db.Uuid
+  job              JobExecution? @relation(fields: [jobId], references: [id], onDelete: SetNull)
+  articleId        String?       @db.Uuid
+  article          Article?      @relation(fields: [articleId], references: [id], onDelete: SetNull)
+  createdAt        DateTime      @default(now())
+
+  @@index([createdAt])
+  @@index([purpose, createdAt])
+}
+
+// ─────────────────────────────────────────────────────────────── readers
+
+model NewsletterSubscriber {
+  id                  String           @id @default(uuid()) @db.Uuid
+  email               String           @unique
+  status              SubscriberStatus @default(PENDING)
+  confirmTokenHash    String?          @unique
+  confirmTokenExpires DateTime?
+  unsubscribeTokenHash String          @unique
+  consentText         String
+  source              String?
+  confirmedAt         DateTime?
+  unsubscribedAt      DateTime?
+  lastSentAt          DateTime?
+  createdAt           DateTime         @default(now())
+  updatedAt           DateTime         @updatedAt
+
+  @@index([status])
+}
+
+model ContactMessage {
+  id        String   @id @default(uuid()) @db.Uuid
+  name      String
+  email     String
+  topic     String
+  message   String
+  handled   Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@index([handled, createdAt])
+}
+
+// ─────────────────────────────────────────────────────────────── configuration & audit
+
+/// Singleton row (id = "default").
+model SiteSettings {
+  id                   String   @id @default("default")
+  siteName             String   @default("The Daily Circuit")
+  tagline              String   @default("AI and Indian markets, every evening at 9.")
+  /// HH:mm in Asia/Kolkata.
+  publishTimeIst       String   @default("21:00")
+  maxAiArticles        Int      @default(10)
+  maxMarketArticles    Int      @default(10)
+  minSelectionScore    Float    @default(0.55)
+  scoringWeights       Json
+  autoPublish          Boolean  @default(true)
+  /// Pipeline does not start for an edition more than this many minutes after publish time.
+  latePublishGraceMin  Int      @default(180)
+  monthlyBudgetUsd     Float    @default(150)
+  enableFactCheckPass  Boolean  @default(true)
+  marketWatchlist      Json
+  significantMovePct   Float    @default(4)
+  adsEnabled           Boolean  @default(false)
+  adsensePublisherId   String?
+  adSlots              Json?
+  newsletterDigestEnabled Boolean @default(false)
+  updatedById          String?  @db.Uuid
+  updatedBy            User?    @relation(fields: [updatedById], references: [id], onDelete: SetNull)
+  updatedAt            DateTime @updatedAt
+}
+
+model AuditLog {
+  id         String    @id @default(uuid()) @db.Uuid
+  actorType  ActorType
+  actorId    String?   @db.Uuid
+  actor      User?     @relation(fields: [actorId], references: [id], onDelete: SetNull)
+  action     String
+  entityType String
+  entityId   String?
+  before     Json?
+  after      Json?
+  ipHash     String?
+  createdAt  DateTime  @default(now())
+
+  @@index([entityType, entityId])
+  @@index([createdAt(sort: Desc)])
+}
+
+/// Fixed-window counters shared across all serverless instances.
+model RateLimitBucket {
+  key         String
+  windowStart DateTime
+  count       Int      @default(0)
+
+  @@id([key, windowStart])
+  @@index([windowStart])
+}

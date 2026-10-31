@@ -1,0 +1,28 @@
+{
+  "name": "the-daily-circuit",
+  "private": true,
+  "description": "The Daily Circuit — an automated evening edition covering AI and Indian markets.",
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
+  "engines": {
+    "node": ">=20.9.0"
+  },
+  "scripts": {
+    "dev": "npm run dev -w @tdc/web",
+    "dev:worker": "npm run dev -w @tdc/worker",
+    "build": "npm run db:generate && npm run build -w @tdc/web && npm run build -w @tdc/worker",
+    "db:generate": "npm run generate -w @tdc/db",
+    "db:migrate": "npm run migrate:dev -w @tdc/db",
+    "db:deploy": "npm run migrate:deploy -w @tdc/db",
+    "db:seed": "npm run seed -w @tdc/db",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "lint": "npm run lint --workspaces --if-present",
+    "test": "npm run test --workspaces --if-present",
+    "test:unit": "npm run test:unit -w @tdc/core",
+    "test:integration": "npm run test:integration -w @tdc/core",
+    "test:e2e": "playwright test",
+    "check": "npm run typecheck && npm run lint && npm run test"
+  }
+}

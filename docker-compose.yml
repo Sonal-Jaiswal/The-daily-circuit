@@ -1,0 +1,20 @@
+# Local development database only. Production uses managed PostgreSQL (Neon or Supabase).
+services:
+  postgres:
+    image: postgres:17-alpine
+    container_name: tdc-postgres
+    environment:
+      POSTGRES_USER: tdc
+      POSTGRES_PASSWORD: tdc_local_dev
+      POSTGRES_DB: tdc
+    ports:
+      - "54329:5432"
+    volumes:
+      - tdc-pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U tdc"]
+      interval: 5s
+      retries: 10
+
+volumes:
+  tdc-pgdata:
