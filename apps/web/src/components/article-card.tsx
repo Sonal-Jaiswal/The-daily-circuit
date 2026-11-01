@@ -3,7 +3,7 @@ import { articlePath, sectionInfo } from "@tdc/core/content/paths";
 import { formatIstDateTime } from "@tdc/core/time/ist";
 import type { ArticleCard as Card } from "@/lib/data";
 import { cn } from "@/lib/utils";
-import { Cover } from "./cover";
+import { CardVisual } from "./cover";
 
 export function SectionLabel({ section, className }: { section: Card["section"]; className?: string }) {
   const info = sectionInfo(section);
@@ -43,7 +43,7 @@ export function StoryRow({ article, showSection = true }: { article: Card; showS
         <Meta article={article} className="mt-2" />
       </div>
       <Link href={articlePath(article)} tabIndex={-1} aria-hidden="true" className="block aspect-[4/3] overflow-hidden rounded-md">
-        <Cover seed={article.slug} section={article.section} />
+        <CardVisual seed={article.slug} section={article.section} illustrationId={article.illustration?.id} />
       </Link>
     </article>
   );
@@ -54,7 +54,7 @@ export function StoryCard({ article }: { article: Card }) {
   return (
     <article className="flex flex-col">
       <Link href={articlePath(article)} tabIndex={-1} aria-hidden="true" className="block aspect-[1.9/1] overflow-hidden rounded-md">
-        <Cover seed={article.slug} section={article.section} />
+        <CardVisual seed={article.slug} section={article.section} illustrationId={article.illustration?.id} />
       </Link>
       <SectionLabel section={article.section} className="mt-3" />
       <h3 className="mt-1 text-[1.15rem] font-bold leading-snug tracking-[-0.01em]">

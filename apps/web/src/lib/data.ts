@@ -141,6 +141,7 @@ export async function getArticle(section: Section, slug: string) {
     seoDescription: a.seoDescription,
     imageAlt: a.imageAlt,
     imageUrl: a.imageUrl,
+    illustration: a.illustration ? { id: a.illustration.id, model: a.illustration.model } : null,
     imageCredit: a.imageCredit,
     readingTimeMinutes: a.readingTimeMinutes,
     generatedByModel: a.generatedByModel,

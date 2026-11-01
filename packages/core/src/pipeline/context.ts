@@ -3,6 +3,7 @@ import type { LlmGateway } from "../ai/gateway";
 import type { Mailer } from "../email/mailer";
 import type { Logger } from "../logger";
 import type { MarketDataProvider } from "../market/provider";
+import type { ImageGenerator } from "../images/illustrate";
 import type { ResolvedSettings } from "../settings";
 
 export interface PipelineContext {
@@ -16,6 +17,8 @@ export interface PipelineContext {
   now: () => Date;
   models: { writer: string; classifier: string };
   marketProvider: MarketDataProvider | null;
+  /** Optional AI illustration generator; articles keep their SVG cover without it. */
+  imageGenerator?: ImageGenerator | null;
   /** Ask the web app to refresh cached pages (sitemaps, home, sections). */
   revalidate: (paths: string[]) => Promise<void>;
   alertRecipients: string[];

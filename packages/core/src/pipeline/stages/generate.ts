@@ -11,6 +11,7 @@ import { readingTimeMinutes, slugify, truncate, uniqueBy, wordCount } from "../.
 import { markdownToPlainText } from "../../content/markdown";
 import { requireLlm, type PipelineContext, type StageResult } from "../context";
 import { ensureEdition } from "./edition";
+import { attachIllustration } from "../../images/illustrate";
 
 type Member = NewsCandidate & { source: NewsSource };
 type ClusterWithMembers = StoryCluster & { candidates: Member[] };
@@ -109,7 +110,7 @@ async function saveDraft(
   draft: ArticleDraft,
   sources: Array<PromptSource & { candidateId: string; isPrimary: boolean; note: string }>,
   stock: StockSnapshot | null,
-  requestId: string | null,
+  usage: { requestId: string | null; model: string },
 ) {
   draft = clampDraft(draft);
   const primary = cluster.candidates.find((m) => m.isClusterPrimary) ?? cluster.candidates[0]!;
@@ -155,7 +156,8 @@ async function saveDraft(
     readingTimeMinutes: readingTimeMinutes(markdownToPlainText(`${draft.introduction}\n${draft.body}\n${draft.context}\n${draft.whyItMatters}\n${draft.implications}\n${draft.risks}`)),
     disclaimerRequired: cluster.desk === "MARKETS",
     generationMeta: meta as unknown as Prisma.InputJsonValue,
-    generatedByModel: ctx.models.writer,
+    // The model that actually wrote this article (the provider chain may have fallen back).
+    generatedByModel: usage.model,
     promptVersion: PROMPT_VERSION,
     validationReport: Prisma.JsonNull,
     reviewFlags: [],
@@ -187,7 +189,7 @@ async function saveDraft(
     await tx.newsCandidate.updateMany({ where: { clusterId: cluster.id, status: "SELECTED" }, data: { status: "USED" } });
     return saved;
   }, { timeout: 30_000, maxWait: 10_000 });
-  if (requestId) await ctx.prisma.apiUsage.updateMany({ where: { requestId }, data: { articleId: article.id } });
+  if (usage.requestId) await ctx.prisma.apiUsage.updateMany({ where: { requestId: usage.requestId }, data: { articleId: article.id } });
   return article;
 }
 
@@ -264,7 +266,8 @@ export async function generateStage(ctx: PipelineContext): Promise<StageResult> 
         await recordFailure(ctx, cluster, editionRow.id, `Writer reported insufficient information: ${draft.insufficientReason}`);
         continue;
       }
-      await saveDraft(ctx, cluster, editionRow.id, draft, sources, stock, usage.requestId);
+      const article = await saveDraft(ctx, cluster, editionRow.id, draft, sources, stock, usage);
+      await attachIllustration(ctx, article.id);
       written += 1;
       ctx.log.info("Draft written", { cluster: cluster.id, headline: draft.headline });
     } catch (error) {

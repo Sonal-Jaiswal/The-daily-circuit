@@ -12,6 +12,7 @@ import { loadSettings } from "@tdc/core/settings";
 import { addMinutes, istDateString, istWallTimeToUtc } from "@tdc/core/time/ist";
 import { createLogger } from "@tdc/core/logger";
 import { createMarketProvider } from "@tdc/core/market/provider";
+import { createImageGenerator } from "@tdc/core/images/cloudflare";
 import { enforceRetention } from "@tdc/core/privacy";
 import { purgeRateLimitBuckets } from "@tdc/core/security/ratelimit";
 import { createRevalidator } from "./revalidate";
@@ -36,7 +37,8 @@ const deps: RunnerDeps = {
   log,
   mailer,
   workerId,
-  llmFactory: llmGatewayFactory(env),
+  llmFactory: llmGatewayFactory(env, log),
+  imageGenerator: createImageGenerator(env),
   marketProvider,
   revalidate: createRevalidator(env, log),
   alertRecipients,
@@ -142,8 +144,8 @@ const server = http.createServer(async (req, res) => {
       lastTickError: state.lastTickError,
       currentJob: state.currentJob,
       jobsRun: state.jobsRun,
-      llmProvider: env.LLM_PROVIDER,
-      llmConfigured: Boolean(env.LLM_PROVIDER === "gemini" ? env.GEMINI_API_KEY : env.ANTHROPIC_API_KEY),
+      llmProviders: env.LLM_PROVIDERS ?? env.LLM_PROVIDER,
+      images: env.IMAGE_PROVIDER,
       marketData: marketProvider?.name ?? "none",
       email: mailer.transport,
     }),

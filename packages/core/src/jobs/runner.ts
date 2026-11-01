@@ -1,12 +1,13 @@
 import { Prisma, type JobExecution, type PrismaClient } from "@tdc/db";
-import { AnthropicGateway, type LlmGateway, type UsageRecord } from "../ai/gateway";
-import { GeminiGateway } from "../ai/gemini";
+import type { LlmGateway, UsageRecord } from "../ai/gateway";
+import { buildLlmChain } from "../ai/providers";
 import type { Env } from "../env";
 import { alertEmail } from "../email/templates";
 import type { Mailer } from "../email/mailer";
 import { siteUrl } from "../env";
 import type { Logger } from "../logger";
 import type { MarketDataProvider } from "../market/provider";
+import type { ImageGenerator } from "../images/illustrate";
 import { ConfigurationError, type PipelineContext } from "../pipeline/context";
 import { runStage } from "../pipeline/run";
 import { loadSettings } from "../settings";
@@ -21,6 +22,7 @@ export interface RunnerDeps {
   /** Build the Claude gateway; null when no API key is configured. */
   llmFactory: (prisma: PrismaClient) => LlmGateway | null;
   marketProvider: MarketDataProvider | null;
+  imageGenerator?: ImageGenerator | null;
   revalidate: (paths: string[]) => Promise<void>;
   alertRecipients: string[];
   models: { writer: string; classifier: string };
@@ -31,35 +33,32 @@ export interface RunnerDeps {
 /** Writes each model call to ApiUsage for the usage and spend dashboard. */
 export function usageRecorder(prisma: PrismaClient, provider: string) {
   return async (u: UsageRecord) => {
-          await prisma.apiUsage.create({
-            data: {
-              provider,
-              model: u.model,
-              purpose: u.purpose,
-              inputTokens: u.inputTokens,
-              outputTokens: u.outputTokens,
-              cacheReadTokens: u.cacheReadTokens,
-              cacheWriteTokens: u.cacheWriteTokens,
-              costUsd: new Prisma.Decimal(u.costUsd),
-              stopReason: u.stopReason,
-              requestId: u.requestId,
-              jobId: u.jobId ?? null,
-              articleId: u.articleId ?? null,
-            },
-          });
+    await prisma.apiUsage.create({
+      data: {
+        provider,
+        model: u.model,
+        purpose: u.purpose,
+        inputTokens: u.inputTokens,
+        outputTokens: u.outputTokens,
+        cacheReadTokens: u.cacheReadTokens,
+        cacheWriteTokens: u.cacheWriteTokens,
+        costUsd: new Prisma.Decimal(u.costUsd),
+        stopReason: u.stopReason,
+        requestId: u.requestId,
+        jobId: u.jobId ?? null,
+        articleId: u.articleId ?? null,
+      },
+    });
   };
 }
 
-/** The configured model gateway (Claude or Gemini), or null when its API key is missing. */
-export function createLlmGateway(env: Pick<Env, "LLM_PROVIDER" | "ANTHROPIC_API_KEY" | "GEMINI_API_KEY" | "GEMINI_MIN_INTERVAL_MS">, prisma: PrismaClient): LlmGateway | null {
-  if (env.LLM_PROVIDER === "gemini") {
-    return env.GEMINI_API_KEY ? new GeminiGateway(env.GEMINI_API_KEY, usageRecorder(prisma, "google"), { minIntervalMs: env.GEMINI_MIN_INTERVAL_MS }) : null;
-  }
-  return env.ANTHROPIC_API_KEY ? new AnthropicGateway(env.ANTHROPIC_API_KEY, usageRecorder(prisma, "anthropic")) : null;
+/** The configured model chain (Gemini, OpenRouter, Groq, Grok, Claude…), or null when no provider has a key. */
+export function createLlmGateway(env: Env, prisma: PrismaClient, log?: Logger): LlmGateway | null {
+  return buildLlmChain(env, (provider) => usageRecorder(prisma, provider), log);
 }
 
-export function llmGatewayFactory(env: Parameters<typeof createLlmGateway>[0]) {
-  return (prisma: PrismaClient) => createLlmGateway(env, prisma);
+export function llmGatewayFactory(env: Env, log?: Logger) {
+  return (prisma: PrismaClient) => createLlmGateway(env, prisma, log);
 }
 
 /** Job-scoped logger that also persists entries for the admin job log view. */
@@ -90,6 +89,7 @@ export async function executeJob(deps: RunnerDeps, job: JobExecution): Promise<J
       now,
       models: deps.models,
       marketProvider: deps.marketProvider,
+      imageGenerator: deps.imageGenerator ?? null,
       revalidate: deps.revalidate,
       alertRecipients: deps.alertRecipients,
       fetchImpl: deps.fetchImpl,

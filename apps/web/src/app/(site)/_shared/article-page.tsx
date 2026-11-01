@@ -182,8 +182,9 @@ export async function ArticlePage({ section, slug }: { section: Section; slug: s
       </header>
 
       <div className="mt-8 aspect-[1.9/1] max-w-4xl overflow-hidden rounded-lg">
-        <ArticleVisual seed={a.slug} section={a.section} alt={a.imageAlt} imageUrl={a.imageUrl} imageCredit={a.imageCredit} />
+        <ArticleVisual seed={a.slug} section={a.section} alt={a.imageAlt} imageUrl={a.imageUrl} imageCredit={a.imageCredit} illustration={a.illustration} />
       </div>
+      {a.illustration && !a.imageUrl && <p className="mt-2 max-w-4xl text-xs text-ink-3">AI-generated illustration ({a.illustration.model.split("/").pop()}). It does not depict real people or events.</p>}
 
       <div className="mt-10 grid gap-12 lg:grid-cols-[minmax(0,40rem)_1fr]">
         <div className="min-w-0">

@@ -3,7 +3,7 @@ import { articlePath } from "@tdc/core/content/paths";
 import { formatEditionDate } from "@tdc/core/time/ist";
 import { Meta, SectionLabel, StoryCard, StoryRow } from "@/components/article-card";
 import { AdSlot, NewsletterForm } from "@/components/client";
-import { Cover } from "@/components/cover";
+import { CardVisual } from "@/components/cover";
 import { MarketSnapshot } from "@/components/market-snapshot";
 import { getHomeData, getPublicSettings } from "@/lib/data";
 
@@ -57,7 +57,7 @@ export default async function HomePage() {
         {featured ? (
           <article className="mt-4 grid gap-6 lg:grid-cols-[1.35fr_1fr] lg:gap-10">
             <Link href={articlePath(featured)} tabIndex={-1} aria-hidden="true" className="block aspect-[1.9/1] overflow-hidden rounded-lg lg:order-2 lg:aspect-auto lg:min-h-[340px]">
-              <Cover seed={featured.slug} section={featured.section} priority />
+              <CardVisual seed={featured.slug} section={featured.section} illustrationId={featured.illustration?.id} />
             </Link>
             <div className="flex flex-col justify-center">
               <SectionLabel section={featured.section} />

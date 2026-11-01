@@ -11,7 +11,7 @@ import { ActionForm, SubmitButton } from "@/components/admin/action-form";
 import { ArticleStatusBadge, PageHeader, usd } from "@/components/admin/ui";
 import { Card, CardContent, CardHeader, CardTitle, Input, Label, Textarea } from "@/components/ui/primitives";
 import { requireUser } from "@/lib/auth";
-import { approveArticleAction, changeSlug, publishNowAction, rejectArticleAction, revalidateArticleAction, saveArticle, unpublishAction } from "@/lib/actions/admin";
+import { approveArticleAction, changeSlug, removeIllustration, publishNowAction, rejectArticleAction, revalidateArticleAction, saveArticle, unpublishAction } from "@/lib/actions/admin";
 
 function Field({ name, label, defaultValue, rows, hint, maxLength }: { name: string; label: string; defaultValue: string; rows?: number; hint?: string; maxLength?: number }) {
   return (
@@ -30,7 +30,7 @@ export default async function ArticleEditor({ params }: PageProps<"/admin/articl
   const prisma = getPrisma();
   const a = await prisma.article.findUnique({
     where: { id },
-    include: { sources: { orderBy: [{ isPrimary: "desc" }, { sortOrder: "asc" }] }, tags: { include: { tag: true } }, reviewedBy: { select: { name: true } }, cluster: { include: { candidates: { select: { id: true, originalHeadline: true, rankingExplanation: true, totalScore: true, isClusterPrimary: true } } } } },
+    include: { illustration: { select: { id: true, model: true, prompt: true } }, sources: { orderBy: [{ isPrimary: "desc" }, { sortOrder: "asc" }] }, tags: { include: { tag: true } }, reviewedBy: { select: { name: true } }, cluster: { include: { candidates: { select: { id: true, originalHeadline: true, rankingExplanation: true, totalScore: true, isClusterPrimary: true } } } } },
   });
   if (!a) notFound();
   const [usage, history] = await Promise.all([
@@ -217,6 +217,31 @@ export default async function ArticleEditor({ params }: PageProps<"/admin/articl
                   </SubmitButton>
                   <p className="text-xs text-ink-3">URLs are permanent once published.</p>
                 </ActionForm>
+              </CardContent>
+            </Card>
+          )}
+
+          {a.illustration && (
+            <Card>
+              <CardHeader>
+                <CardTitle>AI illustration</CardTitle>
+                <p className="text-xs text-ink-3">{a.illustration.model}</p>
+              </CardHeader>
+              <CardContent className="space-y-2">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={`/api/images/${a.illustration.id}`} alt={a.imageAlt} className="w-full rounded-md" />
+                <details className="text-xs text-ink-3">
+                  <summary className="cursor-pointer">Prompt</summary>
+                  {a.illustration.prompt}
+                </details>
+                {canEdit && (
+                  <ActionForm action={removeIllustration} confirm="Remove this illustration? The generated cover is shown instead.">
+                    <input type="hidden" name="id" value={a.id} />
+                    <SubmitButton size="sm" variant="outline">
+                      Remove illustration
+                    </SubmitButton>
+                  </ActionForm>
+                )}
               </CardContent>
             </Card>
           )}

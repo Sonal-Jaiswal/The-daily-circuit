@@ -67,6 +67,20 @@ Repository → Settings → Secrets and variables → Actions:
 
 Trade-offs: GitHub may start scheduled runs late under load (the backup trigger and the 3-hour late-start grace cover this); jobs queued from the dashboard outside the evening run wait until the next run, or until you press **Run workflow**; GitHub pauses scheduled workflows in repositories with no commits for 60 days. Use only one of this workflow or a persistent worker.
 
+### Model providers and illustrations (free-first)
+
+Set the order with the `LLM_PROVIDERS` repository variable, e.g. `gemini,openrouter,groq,xai,anthropic`. Each call goes to the first provider; on a quota error, refusal or invalid output it moves to the next. A provider that hits its quota is skipped for the rest of that run. Every article records the model that wrote it, and the article page names it.
+
+| Provider | Secret | Variable(s) | Cost |
+|---|---|---|---|
+| Google Gemini | `GEMINI_API_KEY` | `GEMINI_MODEL` | Free tier |
+| OpenRouter | `OPENROUTER_API_KEY` | `OPENROUTER_MODELS` | `:free` models: 50 req/day (1,000 after a one-time $10 purchase) |
+| Groq | `GROQ_API_KEY` | `GROQ_MODEL` (required) | Free tier, low token limits |
+| xAI Grok | `XAI_API_KEY` | `XAI_MODEL` (required) | Paid |
+| Anthropic Claude | `ANTHROPIC_API_KEY` | — | Paid |
+
+Illustrations: set variable `IMAGE_PROVIDER=cloudflare` and secrets `CLOUDFLARE_ACCOUNT_ID`, `CLOUDFLARE_AI_TOKEN` (an API token with the *Workers AI* permission). Images are abstract editorial illustrations (no people, logos or text), labelled as AI-generated, stored in PostgreSQL (~150 KB each) and removable from the article editor. Without a token, articles keep their generated SVG covers.
+
 ## 5. Domain (Cloudflare)
 
 1. Vercel → Project → Domains → add `yourdomain.com` and `www.yourdomain.com`.

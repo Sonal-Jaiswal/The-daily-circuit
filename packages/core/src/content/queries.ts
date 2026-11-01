@@ -14,6 +14,7 @@ export const cardSelect = {
   readingTimeMinutes: true,
   publishedAt: true,
   author: { select: { name: true, slug: true } },
+  illustration: { select: { id: true } },
 } satisfies Prisma.ArticleSelect;
 
 export type ArticleCard = Prisma.ArticleGetPayload<{ select: typeof cardSelect }> & { publishedAt: Date };
@@ -48,6 +49,7 @@ export async function getPublishedArticle(prisma: PrismaClient, section: Section
       sources: { orderBy: [{ isPrimary: "desc" }, { sortOrder: "asc" }], select: { id: true, url: true, title: true, publisherName: true, publishedAt: true, citationId: true, isPrimary: true } },
       tags: { include: { tag: true } },
       stocks: { orderBy: { dataTimestamp: "desc" }, take: 1 },
+      illustration: { select: { id: true, model: true } },
       edition: { select: { editionDate: true, title: true } },
     },
   });

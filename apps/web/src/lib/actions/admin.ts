@@ -473,6 +473,20 @@ export async function updateUser(_prev: ActionState | null, formData: FormData):
   });
 }
 
+export async function removeIllustration(_prev: ActionState | null, formData: FormData): Promise<ActionState> {
+  return guarded(async () => {
+    const user = await authorize("articles:edit");
+    const articleId = z.uuid().parse(formData.get("id"));
+    const prisma = getPrisma();
+    const res = await prisma.articleImage.deleteMany({ where: { articleId } });
+    if (res.count) {
+      await audit(prisma, { actorId: user.id, action: "article.illustration.remove", entityType: "Article", entityId: articleId });
+      updateTag(CONTENT_TAG);
+    }
+    return ok(res.count ? "Illustration removed. The article now shows its generated cover." : "This article has no illustration.");
+  });
+}
+
 export async function markMessageHandled(_prev: ActionState | null, formData: FormData): Promise<ActionState> {
   return guarded(async () => {
     await authorize("messages:view");

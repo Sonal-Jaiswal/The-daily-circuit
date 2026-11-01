@@ -9,14 +9,19 @@ export const SITE = {
 
 /** The model family that currently writes articles, for reader-facing disclosures. */
 export function aiModelsLabel(): string {
-  return process.env.LLM_PROVIDER === "gemini" ? "Google\u2019s Gemini models" : "Anthropic\u2019s Claude models";
+  const providers = (process.env.LLM_PROVIDERS || process.env.LLM_PROVIDER || "anthropic").split(",").map((p) => p.trim()).filter(Boolean);
+  if (providers.length > 1) return "AI language models from several providers (each article names the model that wrote it)";
+  return modelFamilyLabel(providers[0] === "gemini" ? "gemini" : providers[0] === "anthropic" ? "claude" : providers[0] ?? "");
 }
 
 /** Reader-facing name for the model recorded on an article. */
 export function modelFamilyLabel(model: string | null | undefined): string {
   if (model?.startsWith("gemini")) return "Google\u2019s Gemini models";
   if (model?.startsWith("claude")) return "Anthropic\u2019s Claude models";
-  return aiModelsLabel();
+  if (model?.startsWith("grok")) return "xAI\u2019s Grok models";
+  if (model?.includes("/")) return `the open model ${model.replace(/:free$/, "")} (via OpenRouter)`;
+  if (model) return `the AI model ${model}`;
+  return "AI language models";
 }
 
 export function siteUrl(): string {

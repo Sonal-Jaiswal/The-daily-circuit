@@ -376,8 +376,9 @@ model Article {
   createdAt          DateTime      @default(now())
   updatedAt          DateTime      @updatedAt
 
-  sources    ArticleSource[]
-  tags       ArticleTag[]
+  sources      ArticleSource[]
+  tags         ArticleTag[]
+  illustration ArticleImage?
   stocks     StockSnapshot[]
   dailyStats ArticleDailyStat[]
   apiUsage   ApiUsage[]
@@ -407,6 +408,19 @@ model ArticleSource {
 
   @@unique([articleId, url])
   @@index([candidateId])
+}
+
+/** AI-generated editorial illustration for an article (abstract; never depicts real people). */
+model ArticleImage {
+  id        String   @id @default(uuid()) @db.Uuid
+  articleId String   @unique @db.Uuid
+  article   Article  @relation(fields: [articleId], references: [id], onDelete: Cascade)
+  mimeType  String
+  data      Bytes
+  prompt    String
+  provider  String
+  model     String
+  createdAt DateTime @default(now())
 }
 
 model ArticleDailyStat {

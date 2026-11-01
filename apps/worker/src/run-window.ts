@@ -11,6 +11,7 @@ import { executeJob, llmGatewayFactory, sendAlert, type RunnerDeps } from "@tdc/
 import { schedulerTick } from "@tdc/core/jobs/scheduler";
 import { createLogger } from "@tdc/core/logger";
 import { createMarketProvider } from "@tdc/core/market/provider";
+import { createImageGenerator } from "@tdc/core/images/cloudflare";
 import { activeEditionDate, scheduledKey } from "@tdc/core/pipeline/schedule";
 import { loadSettings } from "@tdc/core/settings";
 import { addMinutes } from "@tdc/core/time/ist";
@@ -30,7 +31,8 @@ const deps: RunnerDeps = {
   log,
   mailer: createMailer(env, log),
   workerId,
-  llmFactory: llmGatewayFactory(env),
+  llmFactory: llmGatewayFactory(env, log),
+  imageGenerator: createImageGenerator(env),
   marketProvider,
   revalidate: createRevalidator(env, log),
   alertRecipients: adminAlertRecipients(env),

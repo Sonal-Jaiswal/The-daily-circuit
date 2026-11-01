@@ -1,6 +1,15 @@
 import { buildCover, COVER_H, COVER_W, type CoverSection } from "@/lib/cover";
 import { cn } from "@/lib/utils";
 
+/** Card thumbnail: the article's AI illustration when it has one, otherwise the generative cover. */
+export function CardVisual({ seed, section, illustrationId }: { seed: string; section: CoverSection; illustrationId?: string | null }) {
+  if (illustrationId) {
+    // eslint-disable-next-line @next/next/no-img-element
+    return <img src={`/api/images/${illustrationId}`} alt="" className="block h-full w-full object-cover" loading="lazy" decoding="async" />;
+  }
+  return <Cover seed={seed} section={section} />;
+}
+
 /** Inline generative cover. Decorative unless `alt` is given. */
 export function Cover({ seed, section, alt, className, priority }: { seed: string; section: CoverSection; alt?: string; className?: string; priority?: boolean }) {
   const { palette, traces } = buildCover(seed, section);
@@ -36,6 +45,7 @@ export function ArticleVisual({
   alt,
   imageUrl,
   imageCredit,
+  illustration,
   className,
 }: {
   seed: string;
@@ -43,11 +53,21 @@ export function ArticleVisual({
   alt: string;
   imageUrl?: string | null;
   imageCredit?: string | null;
+  illustration?: { id: string; model: string } | null;
   className?: string;
 }) {
+  if (illustration && !imageUrl) {
+    return (
+      <figure className={cn("h-full w-full", className)}>
+        {/* AI-generated illustration stored with the article; labelled as such. */}
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src={`/api/images/${illustration.id}`} alt={alt} className="h-full w-full object-cover" decoding="async" />
+      </figure>
+    );
+  }
   if (imageUrl) {
     return (
-      <figure className={className}>
+      <figure className={cn("h-full w-full", className)}>
         {/* Licensed third-party image chosen by an editor; served as-is with its credit. */}
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img src={imageUrl} alt={alt} className="h-full w-full object-cover" loading="lazy" decoding="async" referrerPolicy="no-referrer" />
