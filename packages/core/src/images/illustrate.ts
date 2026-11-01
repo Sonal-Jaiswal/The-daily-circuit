@@ -31,8 +31,14 @@ export function illustrationPrompt(input: { section: string; imageAlt: string; s
   const subject = truncate(input.imageAlt.replace(/["“”]/g, "").replace(/\s+/g, " ").trim(), 300);
   if (input.style === "photo") {
     // Realistic, but limited to objects, places and technology so it cannot pass as a news photo of a real person or event.
+    // The fast image model largely ignores "no ..." instructions, so words that summon robots or figures are rephrased instead.
+    const scene = subject
+      .replace(/\b(humanoid|android|cyborg)s?\b/gi, "machinery")
+      .replace(/\brobot(ic|s|ics)?\b/gi, "automated machinery")
+      .replace(/\bAI agents?\b/gi, "software system")
+      .replace(/\b(person|people|man|woman|men|women|CEO|executive|founder|judge|official)s?\b/gi, "office");
     return [
-      `Editorial stock photograph evoking this theme: ${subject}.`,
+      `Editorial stock photograph evoking this theme: ${scene}.`,
       "Show objects, places, technology, documents, architecture or abstract scenes only, as a symbolic visual rather than a depiction of a specific real event.",
       "Realistic professional photography, natural light, shallow depth of field, 35mm lens, clean composition, muted colour grading with deep indigo and warm amber tones, wide landscape framing.",
       "Strictly no people, faces, hands, silhouettes or crowds; no robots, humanoids, androids, mannequins, statues or anything with a face; no text, letters, numbers, logos, brand marks, signs, displays with writing, flags or watermarks.",

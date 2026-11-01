@@ -133,6 +133,8 @@ describe("illustrations", () => {
     expect(p).toMatch(/Realistic professional photography/);
     expect(p).toMatch(/no people, faces/);
     expect(p).toMatch(/rather than a depiction of a specific real event/);
+    const rephrased = illustrationPrompt({ section: "AI", imageAlt: "AI agent controlling a robotic rig, watched by a CEO", style: "photo" });
+    expect(rephrased).toMatch(/theme: software system controlling a automated machinery rig, watched by a office\./);
   });
 
   it("decodes Cloudflare's base64 JPEG", async () => {
