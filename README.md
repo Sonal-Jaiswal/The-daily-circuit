@@ -37,7 +37,7 @@ npm run run-job -w @tdc/worker -- PUBLISH 2026-11-01 --force
 ```bash
 npm run typecheck        # all workspaces
 npm run lint             # ESLint (web)
-npm run test -w @tdc/core   # 72 unit + 20 integration tests (needs TEST_DATABASE_URL)
+npm run test -w @tdc/core   # 73 unit + 20 integration tests (needs TEST_DATABASE_URL)
 npm run test:e2e         # 34 Playwright tests: seeds tdc_e2e, builds, starts, tests desktop + mobile
 ```
 

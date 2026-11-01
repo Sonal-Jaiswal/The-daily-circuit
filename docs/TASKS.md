@@ -17,7 +17,7 @@
 - [x] Newsletter: double opt-in, signed unsubscribe, RFC 8058 one-click, daily digest (opt-in setting)
 - [x] Monetisation: AdSense slots (off until approved), consent banner with Consent Mode, ads.txt from settings
 - [x] Security: hashed sessions, scrypt, RBAC, CSRF/origin checks, rate limits, CSP and security headers, retention enforcement
-- [x] Tests: 72 unit, 20 integration, 34 Playwright e2e (desktop + mobile); CI workflow
+- [x] Tests: 73 unit, 20 integration, 34 Playwright e2e (desktop + mobile); CI workflow
 - [x] Deployment configs: `apps/web/vercel.json`, `apps/worker/Dockerfile`, `render.yaml`, `railway.json`
 
 ## Outstanding human actions
