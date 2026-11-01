@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { ArticleDraftSchema } from "../../src/editorial/schema";
+import { ArticleDraftSchema, clampDraft } from "../../src/editorial/schema";
 import { detectInvestmentAdvice, isClickbait } from "../../src/validation/advice";
 import { extractClaimNumbers, statusAfterValidation, validateDraft } from "../../src/validation/validate";
 import { goodDraft, SOURCE_TEXT } from "../fixtures/drafts";
@@ -86,7 +86,8 @@ describe("Claude response schema", () => {
     const { headline: _h, ...missing } = goodDraft();
     expect(ArticleDraftSchema.safeParse(missing).success).toBe(false);
     expect(ArticleDraftSchema.safeParse(goodDraft({ sourcesUsed: ["source-1"] })).success).toBe(false);
-    expect(ArticleDraftSchema.safeParse(goodDraft({ seoTitle: "x".repeat(90) })).success).toBe(false);
+    // Over-long metadata is trimmed before saving rather than discarding the article.
+    expect(clampDraft(goodDraft({ seoTitle: "x".repeat(90) })).seoTitle.length).toBeLessThanOrEqual(70);
     expect(ArticleDraftSchema.safeParse(goodDraft({ keyFacts: [] })).success).toBe(false);
     expect(ArticleDraftSchema.safeParse(goodDraft({ body: "Too short." })).success).toBe(false);
   });

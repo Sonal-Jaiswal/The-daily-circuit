@@ -2,12 +2,12 @@ import { Prisma, type NewsCandidate, type NewsSource, type Section, type StockSn
 import { LlmError } from "../../ai/gateway";
 import { WRITER_SYSTEM, writerPrompt, type PromptSource, type StockContext } from "../../editorial/prompts";
 import { researchCandidate } from "../../editorial/research";
-import { ArticleDraftSchema, PROMPT_VERSION, type ArticleDraft } from "../../editorial/schema";
+import { ArticleDraftSchema, clampDraft, PROMPT_VERSION, type ArticleDraft } from "../../editorial/schema";
 import type { GenerationMeta } from "../../publishing/articles";
 import { uniqueSlug } from "../../publishing/slug";
 import { istWallTimeToUtc, toDbDate } from "../../time/ist";
 import { sha256 } from "../../util/crypto";
-import { readingTimeMinutes, slugify, truncate, uniqueBy } from "../../util/text";
+import { readingTimeMinutes, slugify, truncate, uniqueBy, wordCount } from "../../util/text";
 import { markdownToPlainText } from "../../content/markdown";
 import { requireLlm, type PipelineContext, type StageResult } from "../context";
 import { ensureEdition } from "./edition";
@@ -16,6 +16,7 @@ type Member = NewsCandidate & { source: NewsSource };
 type ClusterWithMembers = StoryCluster & { candidates: Member[] };
 
 const MAX_SOURCES = 4;
+const MIN_DRAFT_WORDS = 350;
 
 export function articleIdempotencyKey(editionDate: string, clusterId: string): string {
   return `${editionDate}:cluster:${clusterId}`;
@@ -110,6 +111,7 @@ async function saveDraft(
   stock: StockSnapshot | null,
   requestId: string | null,
 ) {
+  draft = clampDraft(draft);
   const primary = cluster.candidates.find((m) => m.isClusterPrimary) ?? cluster.candidates[0]!;
   const section: Section = primary.section ?? (cluster.desk === "AI" ? "AI" : "MARKETS");
   const key = articleIdempotencyKey(ctx.editionDate, cluster.id);
@@ -184,7 +186,7 @@ async function saveDraft(
     if (stock) await tx.stockSnapshot.update({ where: { id: stock.id }, data: { articleId: saved.id } });
     await tx.newsCandidate.updateMany({ where: { clusterId: cluster.id, status: "SELECTED" }, data: { status: "USED" } });
     return saved;
-  });
+  }, { timeout: 30_000, maxWait: 10_000 });
   if (requestId) await ctx.prisma.apiUsage.updateMany({ where: { requestId }, data: { articleId: article.id } });
   return article;
 }
@@ -237,17 +239,26 @@ export async function generateStage(ctx: PipelineContext): Promise<StageResult> 
 
       const stock = cluster.desk === "MARKETS" ? await findStockMove(ctx, members) : null;
       const primarySection = members.find((m) => m.isClusterPrimary)?.section ?? (cluster.desk === "AI" ? "AI" : "MARKETS");
-      const { data: draft, usage } = await llm.structured({
-        purpose: "write-article",
-        model: ctx.models.writer,
-        system: WRITER_SYSTEM,
-        prompt: writerPrompt({ desk: cluster.desk, section: primarySection, editionDate: ctx.editionDate, sources, stock: stock ? stockContext(stock) : null }),
-        schema: ArticleDraftSchema,
-        maxTokens: 16_000,
-        effort: "medium",
-        fallback: true,
-        context: { jobId: ctx.jobId },
-      });
+      const prompt = writerPrompt({ desk: cluster.desk, section: primarySection, editionDate: ctx.editionDate, sources, stock: stock ? stockContext(stock) : null });
+      const write = (extra = "") =>
+        llm.structured({
+          purpose: "write-article",
+          model: ctx.models.writer,
+          system: WRITER_SYSTEM,
+          prompt: prompt + extra,
+          schema: ArticleDraftSchema,
+          maxTokens: 16_000,
+          effort: "medium",
+          fallback: true,
+          context: { jobId: ctx.jobId },
+        });
+      let { data: draft, usage } = await write();
+      // Smaller models tend to undershoot the length; ask once for a fuller draft from the same sources.
+      const words = wordCount(markdownToPlainText(`${draft.introduction}\n${draft.body}`));
+      if (!draft.insufficientInformation && words < MIN_DRAFT_WORDS) {
+        ctx.log.info("Draft too short; requesting a fuller rewrite", { cluster: cluster.id, words });
+        ({ data: draft, usage } = await write(`\n\nYour previous draft was only ${words} words. Write the full article again at 450–900 words (introduction plus body), using only these sources and the same rules. If the sources cannot support that length without padding, set insufficientInformation to true.`));
+      }
       if (draft.insufficientInformation) {
         failed += 1;
         await recordFailure(ctx, cluster, editionRow.id, `Writer reported insufficient information: ${draft.insufficientReason}`);
@@ -258,7 +269,7 @@ export async function generateStage(ctx: PipelineContext): Promise<StageResult> 
       ctx.log.info("Draft written", { cluster: cluster.id, headline: draft.headline });
     } catch (error) {
       failed += 1;
-      const reason = error instanceof LlmError ? `Claude ${error.code}: ${error.message}` : (error as Error).message;
+      const reason = error instanceof LlmError ? `Model ${error.code}: ${error.message}` : (error as Error).message;
       problems.push(`"${truncate(cluster.title, 80)}": ${reason}`);
       ctx.log.warn("Article generation failed", { cluster: cluster.id, error: reason });
       await recordFailure(ctx, cluster, editionRow.id, reason);

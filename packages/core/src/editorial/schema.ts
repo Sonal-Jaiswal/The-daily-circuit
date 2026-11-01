@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { truncate } from "../util/text";
 
 export const PROMPT_VERSION = "2026-11-01.1";
 
@@ -24,8 +25,8 @@ const ArticleDraftObject = z.object({
     .boolean()
     .describe("True when the sources do not support a full, accurate article. Set the text fields to short placeholders in that case."),
   insufficientReason: z.string().describe("Why the sources are insufficient, or an empty string."),
-  headline: z.string().max(120).describe("Original, factual headline (at least 15 characters). No clickbait, no question headlines."),
-  excerpt: z.string().max(320).describe("One- or two-sentence summary shown in listings (at least 60 characters)."),
+  headline: z.string().describe("Original, factual headline (at least 15 characters). No clickbait, no question headlines."),
+  excerpt: z.string().describe("One- or two-sentence summary shown in listings (at least 60 characters)."),
   introduction: z.string().describe("Opening paragraph: what happened, who, when. Include citation markers like [S1]."),
   body: z
     .string()
@@ -34,7 +35,6 @@ const ArticleDraftObject = z.object({
   whyItMatters: z.string().describe("Why this matters to readers in India and to the industry."),
   keyFacts: z
     .array(z.object({ fact: z.string().min(1), sourceIds: z.array(sourceId) }))
-    .max(8)
     .describe("3–8 verifiable facts, each tied to the source ids that state it."),
   implications: z.string().describe("Plausible consequences, clearly framed as analysis, not fact."),
   risks: z.string().describe("Risks, open questions and what is not yet confirmed."),
@@ -42,10 +42,10 @@ const ArticleDraftObject = z.object({
   unconfirmed: z.array(z.string()).describe("Claims that are reported, expected or speculative — not confirmed."),
   containsAnalystOpinion: z.boolean().describe("True if the article reports third-party analyst opinions or forecasts."),
   sourcesUsed: z.array(sourceId).describe("Ids of every source the article relies on."),
-  tags: z.array(z.string().min(2).max(40)).max(6).describe("2–6 short topical tags, e.g. 'OpenAI', 'RBI', 'Semiconductors'."),
-  seoTitle: z.string().max(70).describe("Search title, at most 70 characters."),
-  seoDescription: z.string().max(170).describe("Meta description, 70–170 characters."),
-  imageAlt: z.string().max(160).describe("Alt text for an abstract illustration representing the story's topic."),
+  tags: z.array(z.string()).describe("2–6 short topical tags, e.g. 'OpenAI', 'RBI', 'Semiconductors'."),
+  seoTitle: z.string().describe("Search title, at most 70 characters."),
+  seoDescription: z.string().describe("Meta description, 70–170 characters."),
+  imageAlt: z.string().describe("Alt text for an abstract illustration representing the story's topic."),
 });
 type ArticleDraftShape = z.infer<typeof ArticleDraftObject>;
 
@@ -54,6 +54,17 @@ type ArticleDraftShape = z.infer<typeof ArticleDraftObject>;
  * minimums apply only to full articles, so an honest "insufficient information" answer is
  * recorded as such instead of being rejected as malformed.
  */
+// Lengths some models overshoot. Metadata is trimmed to fit rather than discarding a sound article.
+export const clampDraft = <T extends ArticleDraftShape>(d: T): T => ({
+  ...d,
+  excerpt: truncate(d.excerpt.trim(), 320),
+  seoTitle: truncate(d.seoTitle.trim(), 70),
+  seoDescription: truncate(d.seoDescription.trim(), 170),
+  imageAlt: truncate(d.imageAlt.trim(), 160),
+  keyFacts: d.keyFacts.slice(0, 8),
+  tags: d.tags.map((t) => t.trim()).filter((t) => t.length >= 2 && t.length <= 40).slice(0, 6),
+});
+
 export const ArticleDraftSchema = ArticleDraftObject.superRefine((d, ctx) => {
   if (d.insufficientInformation) return;
   for (const [field, min] of DRAFT_MINIMUMS) {
@@ -63,6 +74,7 @@ export const ArticleDraftSchema = ArticleDraftObject.superRefine((d, ctx) => {
   check(d.keyFacts.length >= 3 && d.keyFacts.every((k) => k.sourceIds.length > 0), "keyFacts", "Expected 3–8 key facts, each with at least one source id");
   check(d.sourcesUsed.length > 0, "sourcesUsed", "Expected at least one source id");
   check(d.tags.length >= 2, "tags", "Expected 2–6 tags");
+  check(d.headline.length <= 120, "headline", "Headline is longer than 120 characters");
 });
 export type ArticleDraft = z.infer<typeof ArticleDraftSchema>;
 
