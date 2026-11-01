@@ -35,7 +35,8 @@ export function illustrationPrompt(input: { section: string; imageAlt: string; s
       `Editorial stock photograph evoking this theme: ${subject}.`,
       "Show objects, places, technology, documents, architecture or abstract scenes only, as a symbolic visual rather than a depiction of a specific real event.",
       "Realistic professional photography, natural light, shallow depth of field, 35mm lens, clean composition, muted colour grading with deep indigo and warm amber tones, wide landscape framing.",
-      "Strictly no people, faces, hands, silhouettes or crowds; no text, letters, numbers, logos, brand marks, readable screens, flags or watermarks.",
+      "Strictly no people, faces, hands, silhouettes or crowds; no robots, humanoids, androids, mannequins, statues or anything with a face; no text, letters, numbers, logos, brand marks, signs, displays with writing, flags or watermarks.",
+      "Prefer close-up details of hardware, materials, buildings, landscapes or laboratory equipment.",
     ].join(" ");
   }
   return [
