@@ -613,6 +613,8 @@ model SiteSettings {
   aiCoverageFocus      String   @default("")
   /// Topics the markets desk should prioritise when selecting stories.
   marketsCoverageFocus String   @default("")
+  /// "illustration" (flat editorial art) or "photo" (realistic, never people or real events).
+  imageStyle           String   @default("illustration")
   updatedById          String?  @db.Uuid
   updatedBy            User?    @relation(fields: [updatedById], references: [id], onDelete: SetNull)
   updatedAt            DateTime @updatedAt

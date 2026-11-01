@@ -2,7 +2,7 @@ import { getPrisma } from "@tdc/db";
 import { loadSettings } from "@tdc/core/settings";
 import { ActionForm, SubmitButton } from "@/components/admin/action-form";
 import { PageHeader } from "@/components/admin/ui";
-import { Card, CardContent, CardHeader, CardTitle, Input, Label, Textarea } from "@/components/ui/primitives";
+import { Card, CardContent, CardHeader, CardTitle, Input, Label, Select, Textarea } from "@/components/ui/primitives";
 import { saveSettings } from "@/lib/actions/admin";
 import { requireUser } from "@/lib/auth";
 
@@ -90,6 +90,14 @@ export default async function SettingsPage() {
               <div className="space-y-1.5">
                 <Label htmlFor="marketsCoverageFocus">Markets desk: topics to prioritise</Label>
                 <Textarea id="marketsCoverageFocus" name="marketsCoverageFocus" rows={4} maxLength={1000} defaultValue={s.coverageFocus.MARKETS} placeholder="e.g. RBI policy, SEBI orders, IPOs, banking and fintech" />
+              </div>
+              <div className="space-y-1.5 md:col-span-2">
+                <Label htmlFor="imageStyle">Article image style</Label>
+                <Select id="imageStyle" name="imageStyle" defaultValue={s.imageStyle} className="w-full sm:w-80">
+                  <option value="illustration">Illustration (flat editorial art)</option>
+                  <option value="photo">Realistic (photo-style scenes)</option>
+                </Select>
+                <p className="text-xs text-ink-3">Realistic images show objects, places and technology only: never people, logos, readable text or real events. Every image is labelled as AI-generated. Applies to new articles; to redo recent ones, run the workflow in “reillustrate” mode.</p>
               </div>
             </CardContent>
           </Card>

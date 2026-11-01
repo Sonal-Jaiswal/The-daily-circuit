@@ -8,9 +8,11 @@ export interface GeneratedImage {
   model: string;
 }
 
+export type ImageStyle = "illustration" | "photo";
+
 export interface ImageGenerator {
   readonly name: string;
-  generate(prompt: string, seed: number): Promise<GeneratedImage>;
+  generate(prompt: string, seed: number, options?: { steps?: number }): Promise<GeneratedImage>;
 }
 
 const PALETTE: Record<string, string> = {
@@ -25,8 +27,17 @@ const PALETTE: Record<string, string> = {
  * headline) and forbids people, faces, logos and text, so an illustration can never be mistaken
  * for a news photograph of a real person or event.
  */
-export function illustrationPrompt(input: { section: string; imageAlt: string }): string {
+export function illustrationPrompt(input: { section: string; imageAlt: string; style?: ImageStyle }): string {
   const subject = truncate(input.imageAlt.replace(/["“”]/g, "").replace(/\s+/g, " ").trim(), 300);
+  if (input.style === "photo") {
+    // Realistic, but limited to objects, places and technology so it cannot pass as a news photo of a real person or event.
+    return [
+      `Editorial stock photograph evoking this theme: ${subject}.`,
+      "Show objects, places, technology, documents, architecture or abstract scenes only, as a symbolic visual rather than a depiction of a specific real event.",
+      "Realistic professional photography, natural light, shallow depth of field, 35mm lens, clean composition, muted colour grading with deep indigo and warm amber tones, wide landscape framing.",
+      "Strictly no people, faces, hands, silhouettes or crowds; no text, letters, numbers, logos, brand marks, readable screens, flags or watermarks.",
+    ].join(" ");
+  }
   return [
     `Editorial illustration for a news article. Theme: ${subject}.`,
     "Conceptual and symbolic rather than literal: abstract geometric shapes, flowing circuit-board line motifs, data and network metaphors.",
@@ -41,10 +52,11 @@ export async function attachIllustration(ctx: PipelineContext, articleId: string
   if (!generator) return;
   const article = await ctx.prisma.article.findUnique({ where: { id: articleId }, select: { section: true, imageAlt: true, slug: true, illustration: { select: { id: true } } } });
   if (!article || article.illustration || !article.imageAlt) return;
-  const prompt = illustrationPrompt(article);
+  const style = ctx.settings?.imageStyle ?? "illustration";
+  const prompt = illustrationPrompt({ ...article, style });
   try {
     const seed = parseInt(sha256(article.slug).slice(0, 8), 16) % 2_147_483_647;
-    const image = await generator.generate(prompt, seed);
+    const image = await generator.generate(prompt, seed, { steps: style === "photo" ? 8 : 4 });
     await ctx.prisma.articleImage.create({ data: { articleId, mimeType: image.mimeType, data: new Uint8Array(image.data), prompt, provider: generator.name, model: image.model } });
     ctx.log.info("Illustration generated", { articleId, bytes: image.data.byteLength });
   } catch (error) {

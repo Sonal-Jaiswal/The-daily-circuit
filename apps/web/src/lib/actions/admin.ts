@@ -426,6 +426,7 @@ export async function saveSettings(_prev: ActionState | null, formData: FormData
       writerGuidance: String(f.writerGuidance ?? "").trim().slice(0, 2000),
       aiCoverageFocus: String(f.aiCoverageFocus ?? "").trim().slice(0, 1000),
       marketsCoverageFocus: String(f.marketsCoverageFocus ?? "").trim().slice(0, 1000),
+      imageStyle: f.imageStyle === "photo" ? "photo" : "illustration",
       minSelectionScore: num("minSelectionScore", 0, 1),
       latePublishGraceMin: num("latePublishGraceMin", 0, 720),
       monthlyBudgetUsd: num("monthlyBudgetUsd", 0, 100000),

@@ -58,6 +58,7 @@ export interface ResolvedSettings {
   newsletterDigestEnabled: boolean;
   writerGuidance: string;
   coverageFocus: { AI: string; MARKETS: string };
+  imageStyle: "illustration" | "photo";
 }
 
 export function resolveSettings(raw: SiteSettings): ResolvedSettings {
@@ -85,6 +86,7 @@ export function resolveSettings(raw: SiteSettings): ResolvedSettings {
     newsletterDigestEnabled: raw.newsletterDigestEnabled,
     writerGuidance: raw.writerGuidance.trim(),
     coverageFocus: { AI: raw.aiCoverageFocus.trim(), MARKETS: raw.marketsCoverageFocus.trim() },
+    imageStyle: raw.imageStyle === "photo" ? "photo" : "illustration",
   };
 }
 

@@ -13,9 +13,9 @@ on:
   workflow_dispatch:
     inputs:
       mode:
-        description: "run = evening pipeline / queued jobs; check = test every AI provider and image generation; illustrate = add illustrations to published articles"
+        description: "run = evening pipeline / queued jobs; check = test every AI provider and image generation; illustrate = add images to articles without one; reillustrate = replace images on recent articles (current image style)"
         type: choice
-        options: [run, check, illustrate]
+        options: [run, check, illustrate, reillustrate]
         default: run
 
 concurrency:
@@ -70,5 +70,5 @@ jobs:
         if: ${{ github.event_name == 'schedule' || inputs.mode == 'run' || inputs.mode == '' }}
         run: node apps/worker/dist/run-window.js
       - name: Maintenance (${{ inputs.mode }})
-        if: ${{ github.event_name == 'workflow_dispatch' && (inputs.mode == 'check' || inputs.mode == 'illustrate') }}
+        if: ${{ github.event_name == 'workflow_dispatch' && (inputs.mode == 'check' || inputs.mode == 'illustrate' || inputs.mode == 'reillustrate') }}
         run: node apps/worker/dist/maintenance.js ${{ inputs.mode }}

@@ -128,6 +128,13 @@ describe("illustrations", () => {
     expect(p).toContain("marigold");
   });
 
+  it("realistic style stays to objects and places, never people or events", () => {
+    const p = illustrationPrompt({ section: "AI", imageAlt: "data centre expansion", style: "photo" });
+    expect(p).toMatch(/Realistic professional photography/);
+    expect(p).toMatch(/no people, faces/);
+    expect(p).toMatch(/rather than a depiction of a specific real event/);
+  });
+
   it("decodes Cloudflare's base64 JPEG", async () => {
     const jpeg = Buffer.from([0xff, 0xd8, 0xff, 0xe0, 1, 2, 3]);
     let url = "";

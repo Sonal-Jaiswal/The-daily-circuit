@@ -10,6 +10,7 @@ import { getEnv } from "@tdc/core/env";
 import { createImageGenerator } from "@tdc/core/images/cloudflare";
 import { attachIllustration } from "@tdc/core/images/illustrate";
 import { createLogger } from "@tdc/core/logger";
+import { loadSettings } from "@tdc/core/settings";
 import type { PipelineContext } from "@tdc/core/pipeline/context";
 import { createRevalidator } from "./revalidate";
 
@@ -71,12 +72,18 @@ ${name}: could not list models: ${(error as Error).message}`);
   return anyOk;
 }
 
-async function illustrate(): Promise<void> {
+async function illustrate(replace = false): Promise<void> {
   const prisma = getPrisma();
   const imageGenerator = createImageGenerator(env);
   if (!imageGenerator) throw new Error("Image generation is not configured");
+  const settings = await loadSettings(prisma);
+  if (replace) {
+    const recent = await prisma.article.findMany({ where: { status: "PUBLISHED" }, orderBy: { publishedAt: "desc" }, take: 20, select: { id: true } });
+    await prisma.articleImage.deleteMany({ where: { articleId: { in: recent.map((r) => r.id) } } });
+    console.log(`Replacing illustrations on ${recent.length} recent articles in "${settings.imageStyle}" style`);
+  }
   const articles = await prisma.article.findMany({ where: { status: "PUBLISHED", illustration: null }, orderBy: { publishedAt: "desc" }, take: 20, select: { id: true, headline: true } });
-  const ctx = { prisma, log, imageGenerator } as unknown as PipelineContext;
+  const ctx = { prisma, log, imageGenerator, settings } as unknown as PipelineContext;
   for (const a of articles) {
     await attachIllustration(ctx, a.id);
     console.log(`  ${(await prisma.articleImage.count({ where: { articleId: a.id } })) ? "✓" : "✗"} ${a.headline}`);
@@ -85,7 +92,7 @@ async function illustrate(): Promise<void> {
 }
 
 const mode = process.argv[2];
-(mode === "check" ? check().then((ok) => (process.exitCode = ok ? 0 : 1)) : mode === "illustrate" ? illustrate() : Promise.reject(new Error("Usage: maintenance.js check|illustrate")))
+(mode === "check" ? check().then((ok) => (process.exitCode = ok ? 0 : 1)) : mode === "illustrate" ? illustrate() : mode === "reillustrate" ? illustrate(true) : Promise.reject(new Error("Usage: maintenance.js check|illustrate")))
   .catch((error) => {
     console.error(error);
     process.exitCode = 1;
