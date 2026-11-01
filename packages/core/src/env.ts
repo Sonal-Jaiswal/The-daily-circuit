@@ -21,7 +21,7 @@ const EnvSchema = z.object({
   LLM_PROVIDERS: z.string().optional(),
   OPENROUTER_API_KEY: z.string().optional(),
   /** Comma-separated; OpenRouter falls back through them in order. ":free" models cost nothing. */
-  OPENROUTER_MODELS: z.string().default("nvidia/nemotron-3.5-super-vl:free,xingchen-agi/xing4.0-29b-a4b:free,openrouter/free"),
+  OPENROUTER_MODELS: z.string().default("nvidia/nemotron-3.5-super-vl:free,xingchen-agi/xing4.0-29b-a4b:free,dots-studio/dots-3-note-preview:free"),
   GROQ_API_KEY: z.string().optional(),
   GROQ_MODEL: z.string().optional(),
   XAI_API_KEY: z.string().optional(),

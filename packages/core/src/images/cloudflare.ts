@@ -14,14 +14,15 @@ export class CloudflareImageGenerator implements ImageGenerator {
     private readonly fetchImpl: typeof fetch = fetch,
   ) {}
 
-  async generate(prompt: string, seed: number): Promise<GeneratedImage> {
+  async generate(prompt: string, _seed: number): Promise<GeneratedImage> {
     const url = `https://api.cloudflare.com/client/v4/accounts/${encodeURIComponent(this.accountId)}/ai/run/${this.model}`;
     const body = await withRetry(
       async () => {
         const res = await this.fetchImpl(url, {
           method: "POST",
           headers: { Authorization: `Bearer ${this.token}`, "Content-Type": "application/json" },
-          body: JSON.stringify({ prompt, steps: 4, seed }),
+          // The REST schema rejects `seed`; steps 4 is the model default.
+          body: JSON.stringify({ prompt, steps: 4 }),
           signal: AbortSignal.timeout(60_000),
         });
         const json = (await res.json().catch(() => ({}))) as { success?: boolean; result?: { image?: string }; image?: string; errors?: Array<{ message?: string }> };
