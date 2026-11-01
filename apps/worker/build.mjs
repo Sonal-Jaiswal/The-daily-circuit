@@ -3,7 +3,7 @@ import { build } from "esbuild";
 // Bundle the worker and the workspace TypeScript packages into one file; leave
 // third-party packages (Prisma runtime, pg, Anthropic SDK…) in node_modules.
 await build({
-  entryPoints: ["src/index.ts", "src/run-job.ts", "src/run-window.ts"],
+  entryPoints: ["src/index.ts", "src/run-job.ts", "src/run-window.ts", "src/maintenance.ts"],
   outdir: "dist",
   bundle: true,
   platform: "node",

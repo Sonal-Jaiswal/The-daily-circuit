@@ -7,7 +7,13 @@ on:
   schedule:
     - cron: "25 14 * * *"
     - cron: "10 15 * * *"
-  workflow_dispatch: {}
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "run = evening pipeline / queued jobs; check = test every AI provider and image generation; illustrate = add illustrations to published articles"
+        type: choice
+        options: [run, check, illustrate]
+        default: run
 
 concurrency:
   group: evening-edition
@@ -58,4 +64,8 @@ jobs:
       - run: npm run db:deploy
       - run: npm run build:worker
       - name: Run the evening pipeline
+        if: ${{ github.event_name == 'schedule' || inputs.mode == 'run' || inputs.mode == '' }}
         run: node apps/worker/dist/run-window.js
+      - name: Maintenance (${{ inputs.mode }})
+        if: ${{ github.event_name == 'workflow_dispatch' && (inputs.mode == 'check' || inputs.mode == 'illustrate') }}
+        run: node apps/worker/dist/maintenance.js ${{ inputs.mode }}
