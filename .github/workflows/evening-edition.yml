@@ -1,12 +1,15 @@
 name: Evening edition
 
 # Free alternative to an always-on worker: runs the IST pipeline on GitHub's runners.
-# Times are UTC. 14:25 UTC = 19:55 IST (collection starts at 20:00 IST, publication at 21:00).
-# The 15:10 UTC run is a backup for delayed cron starts; every stage is idempotent.
+# Primary trigger: an external scheduler (e.g. cron-job.org) calls workflow_dispatch at 19:50 IST,
+# because GitHub's own schedule is best-effort and can start hours late at busy times.
+# The schedules below are backups (UTC; 13:47 = 19:17 IST). A run that starts early waits
+# for 20:00 IST; one that finds the work done exits at once. Every stage is idempotent.
 on:
   schedule:
-    - cron: "25 14 * * *"
-    - cron: "10 15 * * *"
+    - cron: "47 13 * * *"
+    - cron: "23 14 * * *"
+    - cron: "7 15 * * *"
   workflow_dispatch:
     inputs:
       mode:
