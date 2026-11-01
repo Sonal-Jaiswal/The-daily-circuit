@@ -32,10 +32,9 @@ services:
         value: claude-sonnet-5-5
       - key: CLAUDE_CLASSIFIER_MODEL
         value: claude-haiku-5-5
+      # "log" until a Resend key is added; then set EMAIL_TRANSPORT=resend and RESEND_API_KEY.
       - key: EMAIL_TRANSPORT
-        value: resend
-      - key: RESEND_API_KEY
-        sync: false
+        value: log
       - key: EMAIL_FROM
         sync: false
       - key: ADMIN_ALERT_EMAILS
