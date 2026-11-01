@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { contactEmail } from "@/lib/site";
+import { aiModelsLabel, contactEmail } from "@/lib/site";
 import { ContactLine, ProsePage } from "../_shared/prose-page";
 
 export const metadata: Metadata = {
@@ -33,7 +33,7 @@ export default function PrivacyPage() {
       </p>
       <h2>Service providers</h2>
       <p>
-        We use hosting, database, email delivery and, if enabled, analytics and advertising providers. They process data on our behalf under their terms. Article drafting sends public news source material, not reader data, to Anthropic&apos;s API.
+        We use hosting, database, email delivery and, if enabled, analytics and advertising providers. They process data on our behalf under their terms. Article drafting sends public news source material, never reader data, to our AI model provider ({aiModelsLabel()}).
       </p>
       <h2>Retention</h2>
       <p>

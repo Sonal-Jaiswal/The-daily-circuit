@@ -22,7 +22,10 @@ jobs:
       DIRECT_DATABASE_URL: ${{ secrets.DIRECT_DATABASE_URL }}
       SESSION_SECRET: ${{ secrets.SESSION_SECRET }}
       INTERNAL_JOB_SECRET: ${{ secrets.INTERNAL_JOB_SECRET }}
+      LLM_PROVIDER: ${{ vars.LLM_PROVIDER || 'anthropic' }}
       ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+      GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+      GEMINI_MODEL: ${{ vars.GEMINI_MODEL || 'gemini-3.5-flash-lite' }}
       RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
       EMAIL_TRANSPORT: ${{ secrets.RESEND_API_KEY != '' && 'resend' || 'log' }}
       EMAIL_FROM: ${{ vars.EMAIL_FROM || 'The Daily Circuit <no-reply@the-daily-circuit.vercel.app>' }}

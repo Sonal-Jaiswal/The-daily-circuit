@@ -11,7 +11,7 @@ import { AdSlot, CopyLinkButton, ViewBeacon } from "@/components/client";
 import { ArticleVisual } from "@/components/cover";
 import { Breadcrumbs, JsonLd } from "@/components/site-chrome";
 import { getArticle, getPublicSettings, getRecentSlugs, getRelated, type PublicArticle } from "@/lib/data";
-import { absoluteUrl, SITE, siteUrl } from "@/lib/site";
+import { absoluteUrl, modelFamilyLabel, SITE, siteUrl } from "@/lib/site";
 import { SECTION_COPY } from "./section-page";
 
 /** Build-time params for an article route. Placeholder keeps the build valid on an empty database. */
@@ -263,7 +263,7 @@ export async function ArticlePage({ section, slug }: { section: Section; slug: s
 
           <section aria-label="How this article was produced" className="mt-8 rounded-lg bg-neel-soft p-5 text-sm leading-relaxed text-ink-2">
             <p>
-              <span className="font-semibold text-ink">How this article was produced.</span> This story was researched and written by an automated system using Anthropic&apos;s Claude models, working only from the sources listed above. Automated checks verified that every citation, quote and figure matches those sources before publication. It was not written by a human reporter.{" "}
+              <span className="font-semibold text-ink">How this article was produced.</span> This story was researched and written by an automated system using {modelFamilyLabel(a.generatedByModel)}, working only from the sources listed above. Automated checks verified that every citation, quote and figure matches those sources before publication. It was not written by a human reporter.{" "}
               <Link href="/editorial-policy" className="text-neel underline underline-offset-2">
                 Editorial policy
               </Link>

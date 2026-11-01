@@ -38,6 +38,6 @@ export class ConfigurationError extends Error {
 }
 
 export function requireLlm(ctx: PipelineContext): LlmGateway {
-  if (!ctx.llm) throw new ConfigurationError("ANTHROPIC_API_KEY is not configured; this stage needs the Claude API");
+  if (!ctx.llm) throw new ConfigurationError("No model API key is configured (ANTHROPIC_API_KEY, or GEMINI_API_KEY with LLM_PROVIDER=gemini); this stage needs an AI model");
   return ctx.llm;
 }

@@ -10,7 +10,13 @@ const EnvSchema = z.object({
   DATABASE_URL: z.string().min(1),
   NEXT_PUBLIC_SITE_URL: z.string().url().default("http://localhost:3000"),
 
+  /** Which model provider writes and checks articles. */
+  LLM_PROVIDER: z.enum(["anthropic", "gemini"]).default("anthropic"),
   ANTHROPIC_API_KEY: z.string().optional(),
+  GEMINI_API_KEY: z.string().optional(),
+  GEMINI_MODEL: z.string().default("gemini-3.5-flash-lite"),
+  /** Minimum gap between Gemini requests; keeps free-tier per-minute limits. */
+  GEMINI_MIN_INTERVAL_MS: z.coerce.number().int().min(0).default(7000),
   CLAUDE_WRITER_MODEL: z.string().default("claude-sonnet-5-5"),
   CLAUDE_CLASSIFIER_MODEL: z.string().default("claude-haiku-5-5"),
 
@@ -58,6 +64,13 @@ export function resetEnvCache(): void {
 
 export function siteUrl(): string {
   return (process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000").replace(/\/+$/, "");
+}
+
+/** Writer and classifier model IDs for the configured provider. */
+export function llmModels(env = getEnv()): { writer: string; classifier: string } {
+  return env.LLM_PROVIDER === "gemini"
+    ? { writer: env.GEMINI_MODEL, classifier: env.GEMINI_MODEL }
+    : { writer: env.CLAUDE_WRITER_MODEL, classifier: env.CLAUDE_CLASSIFIER_MODEL };
 }
 
 export function adminAlertRecipients(env = getEnv()): string[] {

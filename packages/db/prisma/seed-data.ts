@@ -44,14 +44,14 @@ export const authors = [
     name: "The Daily Circuit AI Desk",
     role: "Automated news desk",
     isAutomated: true,
-    bio: "Articles under this byline are researched and drafted by an automated system using Anthropic's Claude models, working only from the sources linked in each story. Automated checks verify sourcing, dates and claims before publication, and stories that fail them are held for an editor.",
+    bio: "Articles under this byline are researched and drafted by an automated system using AI language models (the model used is named on each article), working only from the sources linked in each story. Automated checks verify sourcing, dates and claims before publication, and stories that fail them are held for an editor.",
   },
   {
     slug: "markets-desk",
     name: "The Daily Circuit Markets Desk",
     role: "Automated markets desk",
     isAutomated: true,
-    bio: "Articles under this byline are researched and drafted by an automated system using Anthropic's Claude models from exchange, regulator and company disclosures. They report facts and context only and never give investment advice. Anything that could read as a recommendation is held for an editor.",
+    bio: "Articles under this byline are researched and drafted by an automated system using AI language models (the model used is named on each article) from exchange, regulator and company disclosures. They report facts and context only and never give investment advice. Anything that could read as a recommendation is held for an editor.",
   },
 ] as const;
 

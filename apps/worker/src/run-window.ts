@@ -5,9 +5,9 @@
  */
 import { disconnectPrisma, getPrisma, type JobStatus } from "@tdc/db";
 import { createMailer } from "@tdc/core/email/mailer";
-import { adminAlertRecipients, getEnv } from "@tdc/core/env";
+import { adminAlertRecipients, getEnv, llmModels } from "@tdc/core/env";
 import { claimNextJob, recoverStaleJobs } from "@tdc/core/jobs/queue";
-import { anthropicGatewayFactory, executeJob, sendAlert, type RunnerDeps } from "@tdc/core/jobs/runner";
+import { executeJob, llmGatewayFactory, sendAlert, type RunnerDeps } from "@tdc/core/jobs/runner";
 import { schedulerTick } from "@tdc/core/jobs/scheduler";
 import { createLogger } from "@tdc/core/logger";
 import { createMarketProvider } from "@tdc/core/market/provider";
@@ -30,11 +30,11 @@ const deps: RunnerDeps = {
   log,
   mailer: createMailer(env, log),
   workerId,
-  llmFactory: anthropicGatewayFactory(env.ANTHROPIC_API_KEY),
+  llmFactory: llmGatewayFactory(env),
   marketProvider,
   revalidate: createRevalidator(env, log),
   alertRecipients: adminAlertRecipients(env),
-  models: { writer: env.CLAUDE_WRITER_MODEL, classifier: env.CLAUDE_CLASSIFIER_MODEL },
+  models: llmModels(env),
 };
 
 /** The edition whose pipeline window is open now or opens within the next 75 minutes. */

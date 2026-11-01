@@ -27,7 +27,7 @@ export default async function UsagePage() {
   const pct = settings.monthlyBudgetUsd ? Math.min(100, (spent / settings.monthlyBudgetUsd) * 100) : 0;
   return (
     <>
-      <PageHeader title="Claude API usage" description="Every request to Anthropic is recorded with its token counts and estimated cost at list prices. Generation stops for the month when the budget is reached." />
+      <PageHeader title="AI model usage" description="Every model request (Claude or Gemini) is recorded with its token counts and estimated cost at list prices; Gemini free-tier calls cost $0. Generation stops for the month when the budget is reached." />
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <Stat label="Spent this month" value={usd(spent)} note={`${pct.toFixed(0)}% of $${settings.monthlyBudgetUsd}`} />
         <Stat label="Projected month" value={usd(projected)} note="At the current daily rate" />

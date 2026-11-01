@@ -15,7 +15,7 @@ const NAV = [
   { href: "/admin/jobs", label: "Jobs", icon: Workflow },
   { href: "/admin/sources", label: "Sources", icon: Rss },
   { href: "/admin/taxonomy", label: "Categories & tags", icon: Tags },
-  { href: "/admin/usage", label: "Claude usage", icon: BarChart3 },
+  { href: "/admin/usage", label: "AI usage", icon: BarChart3 },
   { href: "/admin/messages", label: "Messages", icon: Inbox },
   { href: "/admin/subscribers", label: "Subscribers", icon: Mail },
   { href: "/admin/users", label: "Users", icon: Users },

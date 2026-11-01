@@ -70,7 +70,7 @@ export default async function SettingsPage() {
               <p className="text-xs text-ink-3">Weights must add up to 1.</p>
               <NumberField name="minSelectionScore" label="Minimum score to publish" value={s.minSelectionScore} step="0.01" min={0} max={1} hint="Stories below this are not published, even if the quota is not filled." />
               <Toggle name="enableFactCheckPass" label="Run the second-model fact-check on every draft" checked={s.enableFactCheckPass} />
-              <NumberField name="monthlyBudgetUsd" label="Monthly Claude budget (USD)" value={s.monthlyBudgetUsd} step="1" min={0} hint="Article generation pauses for the rest of the month once this is reached." />
+              <NumberField name="monthlyBudgetUsd" label="Monthly AI model budget (USD)" value={s.monthlyBudgetUsd} step="1" min={0} hint="Article generation pauses for the rest of the month once this is reached." />
             </CardContent>
           </Card>
           <Card>

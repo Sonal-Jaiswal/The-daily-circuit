@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { aiModelsLabel } from "@/lib/site";
 import { ProsePage } from "../_shared/prose-page";
 
 export const metadata: Metadata = {
@@ -20,7 +21,7 @@ export default function AboutPage() {
         The Daily Circuit is an automated newsroom. Software collects announcements from official sources (company newsrooms, the Reserve Bank of India, SEBI) and from technology publications. It removes duplicates, groups reports of the same event and ranks them by importance, source credibility, freshness, impact and likely reader interest.
       </p>
       <p>
-        For each selected story, Anthropic&apos;s Claude models draft an original article using only the sources we collected. The draft then goes through automated checks: every citation must point to a real source, quotations must appear word for word in a source, and figures must match the sources. Anything that fails, or that could read as investment advice, is held for a human editor instead of being published.
+        For each selected story, {aiModelsLabel()} draft an original article using only the sources we collected. The draft then goes through automated checks: every citation must point to a real source, quotations must appear word for word in a source, and figures must match the sources. Anything that fails, or that could read as investment advice, is held for a human editor instead of being published.
       </p>
       <p>
         Articles carry an automated-desk byline and say plainly that they were produced by an AI system. We never present them as the work of a human reporter. Read the full <Link href="/editorial-policy">editorial policy</Link>.

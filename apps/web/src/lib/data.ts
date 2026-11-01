@@ -143,6 +143,7 @@ export async function getArticle(section: Section, slug: string) {
     imageUrl: a.imageUrl,
     imageCredit: a.imageCredit,
     readingTimeMinutes: a.readingTimeMinutes,
+    generatedByModel: a.generatedByModel,
     disclaimerRequired: a.disclaimerRequired,
     publishedAt: a.publishedAt,
     modifiedAt: a.contentModifiedAt ?? a.publishedAt,

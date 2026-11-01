@@ -23,7 +23,19 @@ export class ResendMailer implements Mailer {
     private readonly fetchImpl: typeof fetch = fetch,
   ) {}
 
+  /** One request per recipient, so a rejected address cannot block delivery to the others. */
   async send(message: EmailMessage): Promise<{ id: string | null }> {
+    const recipients = Array.isArray(message.to) ? message.to : [message.to];
+    if (recipients.length > 1) {
+      const results = await Promise.allSettled(recipients.map((to) => this.sendOne({ ...message, to })));
+      const delivered = results.filter((r): r is PromiseFulfilledResult<{ id: string | null }> => r.status === "fulfilled");
+      if (!delivered.length) throw (results[0] as PromiseRejectedResult).reason;
+      return delivered[0]!.value;
+    }
+    return this.sendOne({ ...message, to: recipients[0]! });
+  }
+
+  private async sendOne(message: EmailMessage): Promise<{ id: string | null }> {
     return withRetry(
       async () => {
         const res = await this.fetchImpl("https://api.resend.com/emails", {

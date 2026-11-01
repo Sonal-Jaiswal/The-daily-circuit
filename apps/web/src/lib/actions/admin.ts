@@ -8,7 +8,8 @@ import { Prisma, getPrisma, JobType, Role, type Section } from "@tdc/db";
 import { audit } from "@tdc/core/audit";
 import { hashPassword, MIN_PASSWORD_LENGTH } from "@tdc/core/auth/password";
 import { authenticate, createSession, destroyAllSessions, destroySession, SESSION_COOKIE } from "@tdc/core/auth/session";
-import { AnthropicGateway } from "@tdc/core/ai/gateway";
+import { createLlmGateway } from "@tdc/core/jobs/runner";
+import { getEnv, llmModels } from "@tdc/core/env";
 import { parseFeed } from "@tdc/core/collector/feed-parser";
 import { isFetchAllowed } from "@tdc/core/collector/robots";
 import { enqueueJob, cancelQueuedJob } from "@tdc/core/jobs/queue";
@@ -43,26 +44,8 @@ async function guarded(fn: () => Promise<ActionState>): Promise<ActionState> {
   }
 }
 
-function claudeGateway() {
-  const key = process.env.ANTHROPIC_API_KEY;
-  if (!key) return null;
-  const prisma = getPrisma();
-  return new AnthropicGateway(key, async (u) => {
-    await prisma.apiUsage.create({
-      data: {
-        model: u.model,
-        purpose: u.purpose,
-        inputTokens: u.inputTokens,
-        outputTokens: u.outputTokens,
-        cacheReadTokens: u.cacheReadTokens,
-        cacheWriteTokens: u.cacheWriteTokens,
-        costUsd: new Prisma.Decimal(u.costUsd),
-        stopReason: u.stopReason,
-        requestId: u.requestId,
-        articleId: u.articleId ?? null,
-      },
-    });
-  });
+function modelGateway() {
+  return createLlmGateway(getEnv(), getPrisma());
 }
 
 // ─── Authentication ─────────────────────────────────────────────────────────
@@ -184,8 +167,8 @@ export async function revalidateArticleAction(_prev: ActionState | null, formDat
     if (before.status === "PUBLISHED") return fail("Published articles are validated when a correction is saved.");
     const settings = await prisma.siteSettings.findUniqueOrThrow({ where: { id: "default" } });
     const { report, status } = await validateArticle(prisma, id, {
-      llm: claudeGateway(),
-      classifierModel: process.env.CLAUDE_CLASSIFIER_MODEL ?? "claude-haiku-5-5",
+      llm: modelGateway(),
+      classifierModel: llmModels().classifier,
       factCheck: settings.enableFactCheckPass,
       autoPublish: false, // a human is looking at it: always leave the approval to them
     });

@@ -16,6 +16,9 @@ const PRICES: Record<string, Price> = {
   "claude-opus-5-5": { input: 4, output: 20, cacheRead: 0.2, cacheWrite: 5 },
   "claude-opus-5": { input: 5, output: 25, cacheRead: 0.5, cacheWrite: 6.25 },
   "claude-opus-4-8": { input: 5, output: 25, cacheRead: 0.5, cacheWrite: 6.25 },
+  // Gemini free tier: no charge. Replace with paid-tier rates if billing is enabled on the key.
+  "gemini-3.5-flash-lite": { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+  "gemini-3.1-flash-lite": { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
 };
 
 export interface TokenUsage {

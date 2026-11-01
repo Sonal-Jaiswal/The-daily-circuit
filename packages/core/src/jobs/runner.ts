@@ -1,5 +1,7 @@
 import { Prisma, type JobExecution, type PrismaClient } from "@tdc/db";
-import { AnthropicGateway, type LlmGateway } from "../ai/gateway";
+import { AnthropicGateway, type LlmGateway, type UsageRecord } from "../ai/gateway";
+import { GeminiGateway } from "../ai/gemini";
+import type { Env } from "../env";
 import { alertEmail } from "../email/templates";
 import type { Mailer } from "../email/mailer";
 import { siteUrl } from "../env";
@@ -26,13 +28,12 @@ export interface RunnerDeps {
   fetchImpl?: typeof fetch;
 }
 
-/** Writes each Claude call to ApiUsage for the usage and spend dashboard. */
-export function anthropicGatewayFactory(apiKey: string | undefined) {
-  return (prisma: PrismaClient): LlmGateway | null =>
-    apiKey
-      ? new AnthropicGateway(apiKey, async (u) => {
+/** Writes each model call to ApiUsage for the usage and spend dashboard. */
+export function usageRecorder(prisma: PrismaClient, provider: string) {
+  return async (u: UsageRecord) => {
           await prisma.apiUsage.create({
             data: {
+              provider,
               model: u.model,
               purpose: u.purpose,
               inputTokens: u.inputTokens,
@@ -46,8 +47,19 @@ export function anthropicGatewayFactory(apiKey: string | undefined) {
               articleId: u.articleId ?? null,
             },
           });
-        })
-      : null;
+  };
+}
+
+/** The configured model gateway (Claude or Gemini), or null when its API key is missing. */
+export function createLlmGateway(env: Pick<Env, "LLM_PROVIDER" | "ANTHROPIC_API_KEY" | "GEMINI_API_KEY" | "GEMINI_MIN_INTERVAL_MS">, prisma: PrismaClient): LlmGateway | null {
+  if (env.LLM_PROVIDER === "gemini") {
+    return env.GEMINI_API_KEY ? new GeminiGateway(env.GEMINI_API_KEY, usageRecorder(prisma, "google"), { minIntervalMs: env.GEMINI_MIN_INTERVAL_MS }) : null;
+  }
+  return env.ANTHROPIC_API_KEY ? new AnthropicGateway(env.ANTHROPIC_API_KEY, usageRecorder(prisma, "anthropic")) : null;
+}
+
+export function llmGatewayFactory(env: Parameters<typeof createLlmGateway>[0]) {
+  return (prisma: PrismaClient) => createLlmGateway(env, prisma);
 }
 
 /** Job-scoped logger that also persists entries for the admin job log view. */

@@ -3,9 +3,9 @@ import os from "node:os";
 import { disconnectPrisma, getPrisma } from "@tdc/db";
 import { purgeExpiredSessions } from "@tdc/core/auth/session";
 import { createMailer } from "@tdc/core/email/mailer";
-import { adminAlertRecipients, getEnv } from "@tdc/core/env";
+import { adminAlertRecipients, getEnv, llmModels } from "@tdc/core/env";
 import { claimNextJob, recoverStaleJobs } from "@tdc/core/jobs/queue";
-import { anthropicGatewayFactory, executeJob, sendAlert, type RunnerDeps } from "@tdc/core/jobs/runner";
+import { executeJob, llmGatewayFactory, sendAlert, type RunnerDeps } from "@tdc/core/jobs/runner";
 import { schedulerTick } from "@tdc/core/jobs/scheduler";
 import { activeEditionDate, MARKET_SNAPSHOT_TIME_IST } from "@tdc/core/pipeline/schedule";
 import { loadSettings } from "@tdc/core/settings";
@@ -36,11 +36,11 @@ const deps: RunnerDeps = {
   log,
   mailer,
   workerId,
-  llmFactory: anthropicGatewayFactory(env.ANTHROPIC_API_KEY),
+  llmFactory: llmGatewayFactory(env),
   marketProvider,
   revalidate: createRevalidator(env, log),
   alertRecipients,
-  models: { writer: env.CLAUDE_WRITER_MODEL, classifier: env.CLAUDE_CLASSIFIER_MODEL },
+  models: llmModels(env),
 };
 
 const state = {
@@ -142,7 +142,8 @@ const server = http.createServer(async (req, res) => {
       lastTickError: state.lastTickError,
       currentJob: state.currentJob,
       jobsRun: state.jobsRun,
-      claudeConfigured: Boolean(env.ANTHROPIC_API_KEY),
+      llmProvider: env.LLM_PROVIDER,
+      llmConfigured: Boolean(env.LLM_PROVIDER === "gemini" ? env.GEMINI_API_KEY : env.ANTHROPIC_API_KEY),
       marketData: marketProvider?.name ?? "none",
       email: mailer.transport,
     }),
@@ -150,7 +151,7 @@ const server = http.createServer(async (req, res) => {
 });
 
 const port = Number(process.env.PORT ?? 8080);
-server.listen(port, () => log.info("Worker started", { port, claude: Boolean(env.ANTHROPIC_API_KEY), email: mailer.transport }));
+server.listen(port, () => log.info("Worker started", { port, llmProvider: env.LLM_PROVIDER, email: mailer.transport }));
 
 let ticking: Promise<void> | null = null;
 let loop: NodeJS.Timeout | undefined;

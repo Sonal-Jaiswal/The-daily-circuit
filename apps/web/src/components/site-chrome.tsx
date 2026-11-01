@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { cacheLife } from "next/cache";
-import { FOOTER_LINKS, NAV, SITE } from "@/lib/site";
+import { aiModelsLabel, FOOTER_LINKS, NAV, SITE } from "@/lib/site";
 import { MobileMenu, NavLinks, ThemeToggle } from "./client";
 
 export function Logomark({ className }: { className?: string }) {
@@ -56,7 +56,7 @@ export function SiteFooter() {
             <span className="text-lg font-black tracking-[-0.03em]">{SITE.name}</span>
           </Link>
           <p className="mt-3 max-w-md text-sm leading-relaxed text-ink-2">
-            An automated newsroom. Articles are researched and drafted with Anthropic&apos;s Claude models from the sources linked in each story, checked by automated validation, and held for an editor when a check fails.
+            An automated newsroom. Articles are researched and drafted with {aiModelsLabel()} from the sources linked in each story, checked by automated validation, and held for an editor when a check fails.
           </p>
           <p className="mt-3 max-w-md text-sm leading-relaxed text-ink-2">Nothing on this site is investment advice.</p>
         </div>

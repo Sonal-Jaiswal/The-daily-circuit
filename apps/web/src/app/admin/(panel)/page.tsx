@@ -33,18 +33,16 @@ export default async function Overview({ searchParams }: PageProps<"/admin">) {
     <>
       <PageHeader title={`Good to see you, ${user.name.split(" ")[0]}`} description={`Next edition: ${nextEdition}, publishing at ${formatIstDateTime(stageTime(nextEdition, settings.publishTimeIst, "PUBLISH"))}. Collection starts an hour earlier.`} />
       {denied && <p className="mb-4 rounded-md bg-marigold-soft p-3 text-sm text-marigold-ink">Your role does not have access to that page.</p>}
-      {!process.env.ANTHROPIC_API_KEY && (
-        <p className="mb-4 rounded-md bg-marigold-soft p-3 text-sm text-marigold-ink">
-          ANTHROPIC_API_KEY is not set for this web deployment. Classification and writing run in the worker; check that the worker has the key (its health endpoint reports it).
-        </p>
-      )}
+      <p className="mb-4 text-xs text-ink-3">
+        Articles are written by the background runner using {process.env.LLM_PROVIDER === "gemini" ? "Google Gemini" : "Anthropic Claude"}. Its API key lives with the runner (GitHub Actions secrets), not this website.
+      </p>
       <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
         <Stat label="Published" value={count("PUBLISHED")} href="/admin/articles?status=PUBLISHED" />
         <Stat label="Needs review" value={count("NEEDS_REVIEW")} href="/admin/articles?status=NEEDS_REVIEW" />
         <Stat label="Approved, scheduled" value={count("APPROVED")} href="/admin/articles?status=APPROVED" />
         <Stat label="Drafts" value={count("DRAFT")} href="/admin/articles?status=DRAFT" />
         <Stat label="Failed" value={count("FAILED")} href="/admin/articles?status=FAILED" />
-        <Stat label="Claude spend this month" value={usd(spent)} note={`of $${settings.monthlyBudgetUsd} budget`} href="/admin/usage" />
+        <Stat label="AI spend this month" value={usd(spent)} note={`of $${settings.monthlyBudgetUsd} budget`} href="/admin/usage" />
       </div>
 
       <div className="mt-6 grid gap-6 xl:grid-cols-[1.4fr_1fr]">

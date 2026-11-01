@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { aiModelsLabel } from "@/lib/site";
 import { ProsePage } from "../_shared/prose-page";
 
 export const metadata: Metadata = {
@@ -13,7 +14,7 @@ export default function EditorialPolicyPage() {
     <ProsePage title="Editorial policy" lede="How stories are chosen, written and checked, and what we will never do." updated="1 November 2026">
       <h2>Automated production, disclosed</h2>
       <p>
-        Articles are researched and drafted by an automated system built on Anthropic&apos;s Claude models. Each article says so in its byline and in a note at the end. We never invent bylines, describe the system as a human reporter, or claim to have interviewed anyone or witnessed anything.
+        Articles are researched and drafted by an automated system built on {aiModelsLabel()}. Each article says so in its byline and in a note at the end. We never invent bylines, describe the system as a human reporter, or claim to have interviewed anyone or witnessed anything.
       </p>
 
       <h2>Sources</h2>

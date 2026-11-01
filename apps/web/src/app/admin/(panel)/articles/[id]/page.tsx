@@ -260,7 +260,7 @@ export default async function ArticleEditor({ params }: PageProps<"/admin/articl
             <CardHeader>
               <CardTitle>History</CardTitle>
               <p className="text-xs text-ink-3">
-                Claude cost for this article: {usd(Number(usage._sum.costUsd ?? 0))} over {usage._count} call(s)
+                AI model cost for this article: {usd(Number(usage._sum.costUsd ?? 0))} over {usage._count} call(s)
               </p>
             </CardHeader>
             <CardContent>

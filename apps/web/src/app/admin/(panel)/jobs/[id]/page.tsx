@@ -49,7 +49,7 @@ export default async function JobDetail({ params }: PageProps<"/admin/jobs/[id]"
               {job.finishedAt && <p>Finished {formatIstDateTime(job.finishedAt)}</p>}
               {job.lockedBy && <p className="text-ink-3">Worker {job.lockedBy}</p>}
               <p>
-                Claude: {usage._count} call(s), {(usage._sum.inputTokens ?? 0).toLocaleString("en-IN")} in / {(usage._sum.outputTokens ?? 0).toLocaleString("en-IN")} out, {usd(Number(usage._sum.costUsd ?? 0))}
+                AI model: {usage._count} call(s), {(usage._sum.inputTokens ?? 0).toLocaleString("en-IN")} in / {(usage._sum.outputTokens ?? 0).toLocaleString("en-IN")} out, {usd(Number(usage._sum.costUsd ?? 0))}
               </p>
               {job.error && <p className="whitespace-pre-wrap text-down">{job.error}</p>}
             </CardContent>

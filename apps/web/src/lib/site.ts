@@ -7,6 +7,18 @@ export const SITE = {
   locale: "en_IN",
 } as const;
 
+/** The model family that currently writes articles, for reader-facing disclosures. */
+export function aiModelsLabel(): string {
+  return process.env.LLM_PROVIDER === "gemini" ? "Google\u2019s Gemini models" : "Anthropic\u2019s Claude models";
+}
+
+/** Reader-facing name for the model recorded on an article. */
+export function modelFamilyLabel(model: string | null | undefined): string {
+  if (model?.startsWith("gemini")) return "Google\u2019s Gemini models";
+  if (model?.startsWith("claude")) return "Anthropic\u2019s Claude models";
+  return aiModelsLabel();
+}
+
 export function siteUrl(): string {
   return (process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000").replace(/\/+$/, "");
 }
