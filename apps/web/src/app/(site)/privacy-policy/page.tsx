@@ -27,6 +27,10 @@ export default function PrivacyPage() {
           <strong>Security logs:</strong> our hosting providers process IP addresses to deliver the site and protect it from abuse. Where we store an IP address for rate limiting or security, we store a keyed one-way hash, not the address itself.
         </li>
       </ul>
+      <h2>Audience measurement</h2>
+      <p>
+        We count page views with Vercel Web Analytics, which uses no cookies and stores no personal data. It records the page, referring site, country, browser and device type in aggregate, and cannot identify or follow individual visitors.
+      </p>
       <h2>Cookies</h2>
       <p>
         We set no tracking cookies by default. Editors who sign in to our dashboard receive a strictly necessary session cookie. If we enable Google Analytics or Google AdSense, they load only after you choose &ldquo;Allow cookies&rdquo; in the banner. We use Google Consent Mode, so these services treat you as not consenting until you do. You can change your choice by clearing this site&apos;s data in your browser.

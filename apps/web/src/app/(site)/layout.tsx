@@ -1,3 +1,4 @@
+import { Analytics } from "@vercel/analytics/next";
 import { ConsentAndAnalytics } from "@/components/client";
 import { JsonLd, SiteFooter, SiteHeader } from "@/components/site-chrome";
 import { getPublicSettings } from "@/lib/data";
@@ -13,6 +14,8 @@ export default async function SiteLayout({ children }: { children: React.ReactNo
       <SiteHeader />
       <main id="main">{children}</main>
       <SiteFooter />
+      {/* Cookieless, anonymous page-view counting (Vercel Web Analytics); public pages only. */}
+      <Analytics />
       <ConsentAndAnalytics gaId={process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID || null} adsenseClient={settings.ads.enabled && settings.ads.publisherId ? `ca-${settings.ads.publisherId}` : null} />
     </>
   );
