@@ -1,0 +1,46 @@
+name: Evening edition
+
+# Free alternative to an always-on worker: runs the IST pipeline on GitHub's runners.
+# Times are UTC. 14:25 UTC = 19:55 IST (collection starts at 20:00 IST, publication at 21:00).
+# The 15:10 UTC run is a backup for delayed cron starts; every stage is idempotent.
+on:
+  schedule:
+    - cron: "25 14 * * *"
+    - cron: "10 15 * * *"
+  workflow_dispatch: {}
+
+concurrency:
+  group: evening-edition
+  cancel-in-progress: false
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    env:
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      DIRECT_DATABASE_URL: ${{ secrets.DIRECT_DATABASE_URL }}
+      SESSION_SECRET: ${{ secrets.SESSION_SECRET }}
+      INTERNAL_JOB_SECRET: ${{ secrets.INTERNAL_JOB_SECRET }}
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+      RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+      EMAIL_TRANSPORT: ${{ secrets.RESEND_API_KEY != '' && 'resend' || 'log' }}
+      EMAIL_FROM: ${{ vars.EMAIL_FROM || 'The Daily Circuit <no-reply@the-daily-circuit.vercel.app>' }}
+      ADMIN_ALERT_EMAILS: ${{ vars.ADMIN_ALERT_EMAILS }}
+      NEXT_PUBLIC_SITE_URL: ${{ vars.SITE_URL || 'https://the-daily-circuit.vercel.app' }}
+      WEB_INTERNAL_URL: ${{ vars.SITE_URL || 'https://the-daily-circuit.vercel.app' }}
+      CLAUDE_WRITER_MODEL: claude-sonnet-5-5
+      CLAUDE_CLASSIFIER_MODEL: claude-haiku-5-5
+      MARKET_DATA_PROVIDER: none
+      DATABASE_POOL_MAX: "5"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci --workspace @tdc/worker --workspace @tdc/core --workspace @tdc/db --include-workspace-root
+      - run: npm run db:deploy
+      - run: npm run build:worker
+      - name: Run the evening pipeline
+        run: node apps/worker/dist/run-window.js

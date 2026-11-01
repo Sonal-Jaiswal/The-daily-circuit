@@ -57,6 +57,16 @@ Run exactly **one** worker instance (more is safe but unnecessary). The containe
 
 Verify: the platform health check reports `{"status":"ok","db":"ok","claudeConfigured":true}`; the dashboard **Jobs** page lists the scheduled stages from 20:00 IST.
 
+### Free alternative: GitHub Actions
+
+`.github/workflows/evening-edition.yml` runs the pipeline on GitHub's runners every evening (start 19:55 IST, backup start 20:40 IST) using `apps/worker/dist/run-window.js`, which runs the same scheduler and job queue and exits when the edition is published. Free for public repositories.
+
+Repository → Settings → Secrets and variables → Actions:
+* Secrets: `DATABASE_URL`, `DIRECT_DATABASE_URL`, `SESSION_SECRET`, `INTERNAL_JOB_SECRET`, `ANTHROPIC_API_KEY`, optional `RESEND_API_KEY`.
+* Variables (optional): `ADMIN_ALERT_EMAILS`, `EMAIL_FROM`, `SITE_URL`.
+
+Trade-offs: GitHub may start scheduled runs late under load (the backup trigger and the 3-hour late-start grace cover this); jobs queued from the dashboard outside the evening run wait until the next run, or until you press **Run workflow**; GitHub pauses scheduled workflows in repositories with no commits for 60 days. Use only one of this workflow or a persistent worker.
+
 ## 5. Domain (Cloudflare)
 
 1. Vercel → Project → Domains → add `yourdomain.com` and `www.yourdomain.com`.
