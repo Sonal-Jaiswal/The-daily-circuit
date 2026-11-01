@@ -4,36 +4,65 @@ export const PROMPT_VERSION = "2026-11-01.1";
 
 const sourceId = z.string().regex(/^S\d{1,2}$/, "Source ids look like S1, S2…");
 
-/** What the writer model must return. Validated with Zod before anything is stored. */
-export const ArticleDraftSchema = z.object({
+/** Minimum sizes for a real article. Not enforced when the writer reports insufficient information. */
+const DRAFT_MINIMUMS: Array<[keyof ArticleDraftShape, number]> = [
+  ["headline", 15],
+  ["excerpt", 60],
+  ["introduction", 80],
+  ["body", 600],
+  ["context", 60],
+  ["whyItMatters", 60],
+  ["implications", 40],
+  ["risks", 40],
+  ["seoTitle", 20],
+  ["seoDescription", 70],
+  ["imageAlt", 10],
+];
+
+const ArticleDraftObject = z.object({
   insufficientInformation: z
     .boolean()
     .describe("True when the sources do not support a full, accurate article. Set the text fields to short placeholders in that case."),
   insufficientReason: z.string().describe("Why the sources are insufficient, or an empty string."),
-  headline: z.string().min(15).max(120).describe("Original, factual headline. No clickbait, no question headlines."),
-  excerpt: z.string().min(60).max(320).describe("One- or two-sentence summary shown in listings."),
-  introduction: z.string().min(80).describe("Opening paragraph: what happened, who, when. Include citation markers like [S1]."),
+  headline: z.string().max(120).describe("Original, factual headline (at least 15 characters). No clickbait, no question headlines."),
+  excerpt: z.string().max(320).describe("One- or two-sentence summary shown in listings (at least 60 characters)."),
+  introduction: z.string().describe("Opening paragraph: what happened, who, when. Include citation markers like [S1]."),
   body: z
     .string()
-    .min(600)
-    .describe("Main article in restricted Markdown: paragraphs, '### ' subheads, '- ' lists. Cite with [S1] markers next to the claims they support. No URLs."),
-  context: z.string().min(60).describe("Background a reader needs. Cited."),
-  whyItMatters: z.string().min(60).describe("Why this matters to readers in India and to the industry."),
+    .describe("Main article in restricted Markdown, 450–900 words: paragraphs, '### ' subheads, '- ' lists. Cite with [S1] markers next to the claims they support. No URLs."),
+  context: z.string().describe("Background a reader needs. Cited."),
+  whyItMatters: z.string().describe("Why this matters to readers in India and to the industry."),
   keyFacts: z
-    .array(z.object({ fact: z.string().min(10), sourceIds: z.array(sourceId).min(1) }))
-    .min(3)
+    .array(z.object({ fact: z.string().min(1), sourceIds: z.array(sourceId) }))
     .max(8)
-    .describe("Verifiable facts, each tied to the sources that state it."),
-  implications: z.string().min(40).describe("Plausible consequences, clearly framed as analysis, not fact."),
-  risks: z.string().min(40).describe("Risks, open questions and what is not yet confirmed."),
+    .describe("3–8 verifiable facts, each tied to the source ids that state it."),
+  implications: z.string().describe("Plausible consequences, clearly framed as analysis, not fact."),
+  risks: z.string().describe("Risks, open questions and what is not yet confirmed."),
   confirmed: z.array(z.string()).describe("Claims that the sources confirm."),
   unconfirmed: z.array(z.string()).describe("Claims that are reported, expected or speculative — not confirmed."),
   containsAnalystOpinion: z.boolean().describe("True if the article reports third-party analyst opinions or forecasts."),
-  sourcesUsed: z.array(sourceId).min(1).describe("Ids of every source the article relies on."),
-  tags: z.array(z.string().min(2).max(40)).min(2).max(6).describe("Short topical tags, e.g. 'OpenAI', 'RBI', 'Semiconductors'."),
-  seoTitle: z.string().min(20).max(70).describe("Search title, at most 70 characters."),
-  seoDescription: z.string().min(70).max(170).describe("Meta description, 70–170 characters."),
-  imageAlt: z.string().min(10).max(160).describe("Alt text for an abstract illustration representing the story's topic."),
+  sourcesUsed: z.array(sourceId).describe("Ids of every source the article relies on."),
+  tags: z.array(z.string().min(2).max(40)).max(6).describe("2–6 short topical tags, e.g. 'OpenAI', 'RBI', 'Semiconductors'."),
+  seoTitle: z.string().max(70).describe("Search title, at most 70 characters."),
+  seoDescription: z.string().max(170).describe("Meta description, 70–170 characters."),
+  imageAlt: z.string().max(160).describe("Alt text for an abstract illustration representing the story's topic."),
+});
+type ArticleDraftShape = z.infer<typeof ArticleDraftObject>;
+
+/**
+ * What the writer model must return. Validated with Zod before anything is stored. Size
+ * minimums apply only to full articles, so an honest "insufficient information" answer is
+ * recorded as such instead of being rejected as malformed.
+ */
+export const ArticleDraftSchema = ArticleDraftObject.superRefine((d, ctx) => {
+  if (d.insufficientInformation) return;
+  for (const [field, min] of DRAFT_MINIMUMS) {
+    if (String(d[field]).length < min) ctx.addIssue({ code: "custom", path: [field], message: `Too small: expected at least ${min} characters` });
+  }
+  const check = (ok: boolean, path: string, message: string) => ok || ctx.addIssue({ code: "custom", path: [path], message });
+  check(d.keyFacts.length >= 3 && d.keyFacts.every((k) => k.sourceIds.length > 0), "keyFacts", "Expected 3–8 key facts, each with at least one source id");
+  check(d.sourcesUsed.length > 0, "sourcesUsed", "Expected at least one source id");
+  check(d.tags.length >= 2, "tags", "Expected 2–6 tags");
 });
 export type ArticleDraft = z.infer<typeof ArticleDraftSchema>;
 

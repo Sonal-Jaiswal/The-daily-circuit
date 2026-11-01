@@ -88,5 +88,11 @@ describe("Claude response schema", () => {
     expect(ArticleDraftSchema.safeParse(goodDraft({ sourcesUsed: ["source-1"] })).success).toBe(false);
     expect(ArticleDraftSchema.safeParse(goodDraft({ seoTitle: "x".repeat(90) })).success).toBe(false);
     expect(ArticleDraftSchema.safeParse(goodDraft({ keyFacts: [] })).success).toBe(false);
+    expect(ArticleDraftSchema.safeParse(goodDraft({ body: "Too short." })).success).toBe(false);
+  });
+
+  it("accepts placeholder text when the writer reports insufficient information", () => {
+    const thin = goodDraft({ insufficientInformation: true, insufficientReason: "Only a headline was available", excerpt: "n/a", introduction: "n/a", body: "n/a", context: "n/a", whyItMatters: "n/a", keyFacts: [], sourcesUsed: [], tags: [] });
+    expect(ArticleDraftSchema.safeParse(thin).success).toBe(true);
   });
 });
