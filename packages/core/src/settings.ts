@@ -56,6 +56,8 @@ export interface ResolvedSettings {
   significantMovePct: number;
   ads: { enabled: boolean; publisherId: string | null; slots: AdSlots };
   newsletterDigestEnabled: boolean;
+  writerGuidance: string;
+  coverageFocus: { AI: string; MARKETS: string };
 }
 
 export function resolveSettings(raw: SiteSettings): ResolvedSettings {
@@ -81,6 +83,8 @@ export function resolveSettings(raw: SiteSettings): ResolvedSettings {
     // Ads only switch on when an admin enabled them AND a valid publisher ID exists.
     ads: { enabled: raw.adsEnabled && publisherId !== null, publisherId, slots: slots.success ? slots.data : {} },
     newsletterDigestEnabled: raw.newsletterDigestEnabled,
+    writerGuidance: raw.writerGuidance.trim(),
+    coverageFocus: { AI: raw.aiCoverageFocus.trim(), MARKETS: raw.marketsCoverageFocus.trim() },
   };
 }
 

@@ -11,7 +11,7 @@ import { ActionForm, SubmitButton } from "@/components/admin/action-form";
 import { ArticleStatusBadge, PageHeader, usd } from "@/components/admin/ui";
 import { Card, CardContent, CardHeader, CardTitle, Input, Label, Textarea } from "@/components/ui/primitives";
 import { requireUser } from "@/lib/auth";
-import { approveArticleAction, changeSlug, removeIllustration, publishNowAction, rejectArticleAction, revalidateArticleAction, saveArticle, unpublishAction } from "@/lib/actions/admin";
+import { approveArticleAction, changeSlug, publishOwnArticle, removeIllustration, publishNowAction, rejectArticleAction, revalidateArticleAction, saveArticle, unpublishAction } from "@/lib/actions/admin";
 
 function Field({ name, label, defaultValue, rows, hint, maxLength }: { name: string; label: string; defaultValue: string; rows?: number; hint?: string; maxLength?: number }) {
   return (
@@ -23,14 +23,15 @@ function Field({ name, label, defaultValue, rows, hint, maxLength }: { name: str
   );
 }
 
-export default async function ArticleEditor({ params }: PageProps<"/admin/articles/[id]">) {
+export default async function ArticleEditor({ params, searchParams }: PageProps<"/admin/articles/[id]">) {
   const user = await requireUser("dashboard:view");
   const { id } = await params;
+  const { created } = await searchParams;
   if (!z.uuid().safeParse(id).success) notFound();
   const prisma = getPrisma();
   const a = await prisma.article.findUnique({
     where: { id },
-    include: { illustration: { select: { id: true, model: true, prompt: true } }, sources: { orderBy: [{ isPrimary: "desc" }, { sortOrder: "asc" }] }, tags: { include: { tag: true } }, reviewedBy: { select: { name: true } }, cluster: { include: { candidates: { select: { id: true, originalHeadline: true, rankingExplanation: true, totalScore: true, isClusterPrimary: true } } } } },
+    include: { author: { select: { name: true, isAutomated: true } }, illustration: { select: { id: true, model: true, prompt: true } }, sources: { orderBy: [{ isPrimary: "desc" }, { sortOrder: "asc" }] }, tags: { include: { tag: true } }, reviewedBy: { select: { name: true } }, cluster: { include: { candidates: { select: { id: true, originalHeadline: true, rankingExplanation: true, totalScore: true, isClusterPrimary: true } } } } },
   });
   if (!a) notFound();
   const [usage, history] = await Promise.all([
@@ -44,6 +45,7 @@ export default async function ArticleEditor({ params }: PageProps<"/admin/articl
   const canReview = can(user.role, "articles:review");
   const canPublish = can(user.role, "articles:publish");
   const live = a.status === "PUBLISHED";
+  const humanWritten = !a.author.isAutomated;
 
   return (
     <>
@@ -62,6 +64,11 @@ export default async function ArticleEditor({ params }: PageProps<"/admin/articl
         }
       />
 
+      {created && (
+        <p role="status" className="mb-4 rounded-md bg-neel-soft p-3 text-sm text-ink">
+          {created === "published" ? "Your article is published." : "Your draft is saved. Publish it from the panel on the right when it's ready."}
+        </p>
+      )}
       <div className="grid gap-6 xl:grid-cols-[1fr_380px]">
         <div className="space-y-6">
           {report && (
@@ -162,7 +169,16 @@ export default async function ArticleEditor({ params }: PageProps<"/admin/articl
                   </SubmitButton>
                 </ActionForm>
               )}
-              {canReview && ["NEEDS_REVIEW", "DRAFT"].includes(a.status) && (
+              {humanWritten && canPublish && ["DRAFT", "NEEDS_REVIEW", "APPROVED"].includes(a.status) && (
+                <ActionForm action={publishOwnArticle} confirm="Publish this article now?">
+                  <input type="hidden" name="id" value={a.id} />
+                  <SubmitButton className="w-full" pendingLabel="Publishing…">
+                    Publish now
+                  </SubmitButton>
+                  <p className="mt-1 text-xs text-ink-3">Written by {a.author.name}. Automated checks are shown as advice only.</p>
+                </ActionForm>
+              )}
+              {!humanWritten && canReview && ["NEEDS_REVIEW", "DRAFT"].includes(a.status) && (
                 <ActionForm action={approveArticleAction}>
                   <input type="hidden" name="id" value={a.id} />
                   <SubmitButton className="w-full" disabled={!report || report.blocking.length > 0} pendingLabel="Approving…">
@@ -171,7 +187,7 @@ export default async function ArticleEditor({ params }: PageProps<"/admin/articl
                   {report && report.blocking.length > 0 && <p className="mt-1 text-xs text-ink-3">Fix the blocking issues first.</p>}
                 </ActionForm>
               )}
-              {canPublish && a.status === "APPROVED" && (
+              {!humanWritten && canPublish && a.status === "APPROVED" && (
                 <ActionForm action={publishNowAction} confirm="Publish this article now?">
                   <input type="hidden" name="id" value={a.id} />
                   <SubmitButton className="w-full" pendingLabel="Publishing…">

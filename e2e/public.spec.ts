@@ -7,7 +7,9 @@ test.describe("homepage", () => {
   test("renders the lead story, desks, trending, snapshot notice and newsletter", async ({ page }) => {
     await page.goto("/");
     await expect(page).toHaveTitle(/The Daily Circuit/);
-    await expect(page.getByRole("heading", { level: 1 })).toContainText("Example Labs releases a fixture language model");
+    // The lead is the newest story (other tests may publish one), so check it exists rather than which it is.
+    await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
+    await expect(page.getByRole("link", { name: /Example Labs releases a fixture language model/ }).first()).toBeVisible();
     await expect(page.getByRole("heading", { name: "Today in AI" })).toBeVisible();
     await expect(page.getByRole("heading", { name: "Today in Indian markets" })).toBeVisible();
     await expect(page.getByRole("heading", { name: "Most read this week" })).toBeVisible();

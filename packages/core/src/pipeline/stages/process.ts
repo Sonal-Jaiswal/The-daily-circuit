@@ -90,6 +90,14 @@ function classifyPrompt(batch: CandidateWithSource[]): string {
     .join("\n");
 }
 
+/** Editor-set coverage priorities nudge importance and interest scores; they never make a non-story relevant. */
+function focusNote(ctx: PipelineContext): string {
+  const { AI, MARKETS } = ctx.settings.coverageFocus;
+  if (!AI && !MARKETS) return "";
+  const lines = [AI && `AI desk priorities: ${AI.slice(0, 1000)}`, MARKETS && `Markets desk priorities: ${MARKETS.slice(0, 1000)}`].filter(Boolean);
+  return `Editor's coverage priorities (score matching stories a little higher for interest and importance; do not change the section rules):\n${lines.join("\n")}\n\n`;
+}
+
 /** Step 3: classification with the economical model. */
 async function classify(ctx: PipelineContext, candidates: CandidateWithSource[]) {
   const llm = requireLlm(ctx);
@@ -100,7 +108,7 @@ async function classify(ctx: PipelineContext, candidates: CandidateWithSource[])
       purpose: "classify",
       model: ctx.models.classifier,
       system: CLASSIFIER_SYSTEM,
-      prompt: `Classify these ${batch.length} items. Return exactly one entry per id.\n\n${classifyPrompt(batch)}`,
+      prompt: `${focusNote(ctx)}Classify these ${batch.length} items. Return exactly one entry per id.\n\n${classifyPrompt(batch)}`,
       schema: ClassificationSchema,
       maxTokens: 12_000,
       effort: "low",

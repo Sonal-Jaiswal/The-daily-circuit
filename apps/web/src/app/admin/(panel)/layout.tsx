@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { Suspense } from "react";
-import { BarChart3, Briefcase, FileText, Inbox, LayoutDashboard, ListChecks, Mail, Rss, Settings, Tags, Users, Workflow } from "lucide-react";
+import { BarChart3, LifeBuoy, Briefcase, FileText, Inbox, LayoutDashboard, ListChecks, Mail, Rss, Settings, Tags, Users, Workflow } from "lucide-react";
 import { Logomark } from "@/components/site-chrome";
 import { getCurrentUser } from "@/lib/auth";
 import { logout } from "@/lib/actions/admin";
@@ -20,6 +20,7 @@ const NAV = [
   { href: "/admin/subscribers", label: "Subscribers", icon: Mail },
   { href: "/admin/users", label: "Users", icon: Users },
   { href: "/admin/settings", label: "Settings", icon: Settings },
+  { href: "/admin/help", label: "How to use", icon: LifeBuoy },
 ];
 
 async function UserBadge() {

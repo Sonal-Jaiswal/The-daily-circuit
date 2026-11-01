@@ -5,9 +5,10 @@ import { formatIstDateTime } from "@tdc/core/time/ist";
 import { ArticleStatusBadge, Empty, PageHeader } from "@/components/admin/ui";
 import { Table, Td, Th } from "@/components/ui/primitives";
 import { requireUser } from "@/lib/auth";
+import { can } from "@tdc/core/auth/rbac";
 
 export default async function ArticlesAdmin({ searchParams }: PageProps<"/admin/articles">) {
-  await requireUser("dashboard:view");
+  const user = await requireUser("dashboard:view");
   const { status, q } = await searchParams;
   const statusFilter = typeof status === "string" && status in ArticleStatus ? (status as ArticleStatus) : undefined;
   const query = typeof q === "string" ? q.trim().slice(0, 100) : "";
@@ -33,7 +34,17 @@ export default async function ArticlesAdmin({ searchParams }: PageProps<"/admin/
   ];
   return (
     <>
-      <PageHeader title="Articles" description="Generated and edited articles. Open one to review its validation report, edit it, approve or publish." />
+      <PageHeader
+        title="Articles"
+        description="Generated and edited articles. Open one to review its validation report, edit it, approve or publish."
+        actions={
+          can(user.role, "articles:edit") ? (
+            <Link href="/admin/articles/new" className="inline-flex h-9 items-center rounded-md border border-border bg-surface px-3 text-sm font-semibold hover:bg-muted">
+              Write an article
+            </Link>
+          ) : null
+        }
+      />
       <div className="mb-4 flex flex-wrap items-center gap-2">
         {tabs.map((t) => (
           <Link

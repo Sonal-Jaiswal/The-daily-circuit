@@ -241,7 +241,7 @@ export async function generateStage(ctx: PipelineContext): Promise<StageResult> 
 
       const stock = cluster.desk === "MARKETS" ? await findStockMove(ctx, members) : null;
       const primarySection = members.find((m) => m.isClusterPrimary)?.section ?? (cluster.desk === "AI" ? "AI" : "MARKETS");
-      const prompt = writerPrompt({ desk: cluster.desk, section: primarySection, editionDate: ctx.editionDate, sources, stock: stock ? stockContext(stock) : null });
+      const prompt = writerPrompt({ desk: cluster.desk, section: primarySection, editionDate: ctx.editionDate, sources, stock: stock ? stockContext(stock) : null, guidance: ctx.settings.writerGuidance });
       const write = (extra = "") =>
         llm.structured({
           purpose: "write-article",

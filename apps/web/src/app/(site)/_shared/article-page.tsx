@@ -190,7 +190,7 @@ export async function ArticlePage({ section, slug }: { section: Section; slug: s
         <div className="min-w-0">
           {a.stock && <StockMoverBox stock={a.stock} />}
 
-          <section aria-labelledby="key-facts" className="mb-8 rounded-lg border border-rule bg-surface p-5">
+          {a.keyFacts.length > 0 && <section aria-labelledby="key-facts" className="mb-8 rounded-lg border border-rule bg-surface p-5">
             <h2 id="key-facts" className="text-sm font-bold">
               Key facts
             </h2>
@@ -211,21 +211,37 @@ export async function ArticlePage({ section, slug }: { section: Section; slug: s
                 </li>
               ))}
             </ul>
-          </section>
+          </section>}
 
           <div className="prose-article">
             <RichText text={a.introduction} citations={citations} />
             <RichText text={a.body} citations={citations} />
             <AdSlot client={adClient} slot={settings.ads.slots.inArticle} />
-            <h2>Context</h2>
-            <RichText text={a.context} citations={citations} />
-            <h2>Why it matters</h2>
-            <RichText text={a.whyItMatters} citations={citations} />
-            <h2>What could happen next</h2>
-            <p className="!mb-2 font-sans text-sm text-ink-3">AI-generated analysis based on the sources below. Not a forecast or recommendation.</p>
-            <RichText text={a.implications} citations={citations} />
-            <h2>Risks and open questions</h2>
-            <RichText text={a.risks} citations={citations} />
+            {a.context && (
+              <>
+                <h2>Context</h2>
+                <RichText text={a.context} citations={citations} />
+              </>
+            )}
+            {a.whyItMatters && (
+              <>
+                <h2>Why it matters</h2>
+                <RichText text={a.whyItMatters} citations={citations} />
+              </>
+            )}
+            {a.implications && (
+              <>
+                <h2>What could happen next</h2>
+                {a.author.isAutomated && <p className="!mb-2 font-sans text-sm text-ink-3">AI-generated analysis based on the sources below. Not a forecast or recommendation.</p>}
+                <RichText text={a.implications} citations={citations} />
+              </>
+            )}
+            {a.risks && (
+              <>
+                <h2>Risks and open questions</h2>
+                <RichText text={a.risks} citations={citations} />
+              </>
+            )}
           </div>
 
           {a.disclaimerRequired && (
@@ -240,7 +256,7 @@ export async function ArticlePage({ section, slug }: { section: Section; slug: s
             </aside>
           )}
 
-          <section aria-labelledby="sources-heading" className="mt-10">
+          {a.sources.length > 0 && <section aria-labelledby="sources-heading" className="mt-10">
             <h2 id="sources-heading" className="text-xl font-extrabold tracking-[-0.02em]">
               Sources
             </h2>
@@ -260,11 +276,14 @@ export async function ArticlePage({ section, slug }: { section: Section; slug: s
                 </li>
               ))}
             </ol>
-          </section>
+          </section>}
 
           <section aria-label="How this article was produced" className="mt-8 rounded-lg bg-neel-soft p-5 text-sm leading-relaxed text-ink-2">
             <p>
-              <span className="font-semibold text-ink">How this article was produced.</span> This story was researched and written by an automated system using {modelFamilyLabel(a.generatedByModel)}, working only from the sources listed above. Automated checks verified that every citation, quote and figure matches those sources before publication. It was not written by a human reporter.{" "}
+              <span className="font-semibold text-ink">How this article was produced.</span>{" "}
+              {a.author.isAutomated
+                ? <>This story was researched and written by an automated system using {modelFamilyLabel(a.generatedByModel)}, working only from the sources listed above. Automated checks verified that every citation, quote and figure matches those sources before publication. It was not written by a human reporter.{" "}</>
+                : <>This article was written by {a.author.name}, an editor at {SITE.name}.{" "}</>}
               <Link href="/editorial-policy" className="text-neel underline underline-offset-2">
                 Editorial policy
               </Link>

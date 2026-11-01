@@ -19,7 +19,7 @@ import { rateLimit } from "@tdc/core/security/ratelimit";
 import { ADSENSE_PUBLISHER_RE, AdSlotsSchema, ScoringWeightsSchema, WatchlistItemSchema } from "@tdc/core/settings";
 import { isValidDateString, isValidHhmm, istDateString } from "@tdc/core/time/ist";
 import { fetchText } from "@tdc/core/util/http";
-import { readingTimeMinutes, slugify } from "@tdc/core/util/text";
+import { readingTimeMinutes, slugify, truncate } from "@tdc/core/util/text";
 import { markdownToPlainText } from "@tdc/core/content/markdown";
 import { deskForSection } from "@tdc/core/content/paths";
 import { validateDraft } from "@tdc/core/validation/validate";
@@ -79,13 +79,14 @@ const ArticleEdit = z.object({
   id: z.uuid(),
   headline: z.string().trim().min(15).max(160),
   excerpt: z.string().trim().min(40).max(400),
-  introduction: z.string().trim().min(40),
-  body: z.string().trim().min(200),
-  context: z.string().trim().min(20),
-  whyItMatters: z.string().trim().min(20),
-  implications: z.string().trim().min(20),
-  risks: z.string().trim().min(20),
-  keyFacts: z.string().trim().min(10),
+  // Optional sections may be empty (human-written articles often omit them); AI drafts are checked by validation.
+  introduction: z.string().trim(),
+  body: z.string().trim().min(100),
+  context: z.string().trim(),
+  whyItMatters: z.string().trim(),
+  implications: z.string().trim(),
+  risks: z.string().trim(),
+  keyFacts: z.string().trim(),
   seoTitle: z.string().trim().min(10).max(70),
   seoDescription: z.string().trim().min(50).max(170),
   imageAlt: z.string().trim().min(5).max(200),
@@ -113,13 +114,15 @@ export async function saveArticle(_prev: ActionState | null, formData: FormData)
     if (!parsed.success) return fail(`Check ${parsed.error.issues[0]?.path.join(".")}: ${parsed.error.issues[0]?.message}`);
     const d = parsed.data;
     const prisma = getPrisma();
-    const before = await prisma.article.findUniqueOrThrow({ where: { id: d.id }, include: { sources: true, tags: { include: { tag: true } } } });
+    const before = await prisma.article.findUniqueOrThrow({ where: { id: d.id }, include: { sources: true, tags: { include: { tag: true } }, author: { select: { isAutomated: true } } } });
+    const humanWritten = !before.author.isAutomated;
     if (d.imageUrl && (!d.imageCredit || !d.imageLicense)) return fail("A third-party image needs both a credit and a licence note.");
     const keyFacts = parseKeyFacts(d.keyFacts);
     const next = { ...before, ...d, keyFacts, imageUrl: d.imageUrl || null, imageCredit: d.imageCredit || null, imageLicense: d.imageLicense || null };
     const report = validateDraft(draftFromArticle(next as typeof before), validationSources(before), { desk: deskForSection(before.section) });
     const isLive = before.status === "PUBLISHED";
-    if (isLive && report.blocking.length) return fail(`Not saved. The published article would fail validation: ${report.blocking.join("; ")}`);
+    // Automated checks are advisory for human-written articles; they gate AI-written ones.
+    if (isLive && report.blocking.length && !humanWritten) return fail(`Not saved. The published article would fail validation: ${report.blocking.join("; ")}`);
     const changed = await prisma.article.update({
       where: { id: d.id },
       data: {
@@ -209,6 +212,22 @@ export async function publishNowAction(_prev: ActionState | null, formData: Form
     const prisma = getPrisma();
     const a = await publishArticleNow(prisma, id);
     await audit(prisma, { actorId: user.id, action: "article.publish", entityType: "Article", entityId: id, after: { publishedAt: a.publishedAt } });
+    updateTag(CONTENT_TAG);
+    return ok("Published.");
+  });
+}
+
+/** Editors publish their own (human-written) drafts directly; AI drafts must go through approval. */
+export async function publishOwnArticle(_prev: ActionState | null, formData: FormData): Promise<ActionState> {
+  return guarded(async () => {
+    const user = await authorize("articles:publish");
+    const id = z.uuid().parse(formData.get("id"));
+    const prisma = getPrisma();
+    const a = await prisma.article.findUniqueOrThrow({ where: { id }, select: { status: true, author: { select: { isAutomated: true } } } });
+    if (a.author.isAutomated) return fail("AI-written articles are published through approval.");
+    if (!["DRAFT", "NEEDS_REVIEW", "APPROVED"].includes(a.status)) return fail(`Cannot publish an article in status ${a.status}.`);
+    await prisma.article.update({ where: { id }, data: { status: "PUBLISHED", publishedAt: new Date(), reviewedById: user.id, reviewedAt: new Date() } });
+    await audit(prisma, { actorId: user.id, action: "article.publish", entityType: "Article", entityId: id });
     updateTag(CONTENT_TAG);
     return ok("Published.");
   });
@@ -402,8 +421,11 @@ export async function saveSettings(_prev: ActionState | null, formData: FormData
     if (adsEnabled && !publisherId) return fail("Ads cannot be enabled without an approved AdSense publisher ID.");
     const data = {
       publishTimeIst,
-      maxAiArticles: num("maxAiArticles", 0, 10),
-      maxMarketArticles: num("maxMarketArticles", 0, 10),
+      maxAiArticles: num("maxAiArticles", 0, 20),
+      maxMarketArticles: num("maxMarketArticles", 0, 20),
+      writerGuidance: String(f.writerGuidance ?? "").trim().slice(0, 2000),
+      aiCoverageFocus: String(f.aiCoverageFocus ?? "").trim().slice(0, 1000),
+      marketsCoverageFocus: String(f.marketsCoverageFocus ?? "").trim().slice(0, 1000),
       minSelectionScore: num("minSelectionScore", 0, 1),
       latePublishGraceMin: num("latePublishGraceMin", 0, 720),
       monthlyBudgetUsd: num("monthlyBudgetUsd", 0, 100000),
@@ -470,6 +492,98 @@ export async function updateUser(_prev: ActionState | null, formData: FormData):
     }
     await audit(prisma, { actorId: admin.id, action: `user.${intent}`, entityType: "User", entityId: id });
     return ok("User updated.");
+  });
+}
+
+const ManualArticle = z.object({
+  section: z.enum(["AI", "TECHNOLOGY", "MARKETS", "IPO"]),
+  headline: z.string().trim().min(10, "Headline is too short").max(160),
+  excerpt: z.string().trim().min(30, "Summary is too short").max(400),
+  body: z.string().trim().min(100, "The article body is too short"),
+  whyItMatters: z.string().trim().max(3000).optional(),
+  sources: z.string().max(5000).optional(),
+  tags: z.string().max(300).optional(),
+  imageUrl: z.union([z.literal(""), z.url({ protocol: /^https$/ })]).optional(),
+  imageCredit: z.string().trim().max(200).optional(),
+  intent: z.enum(["draft", "publish"]),
+});
+
+/** "https://url | Publisher | Title" per line; publisher and title optional. */
+function parseSources(text: string) {
+  return text
+    .split("\n")
+    .map((l) => l.trim())
+    .filter(Boolean)
+    .slice(0, 12)
+    .map((line, i) => {
+      const [url, publisher, title] = line.split("|").map((p) => p.trim());
+      const parsed = z.url({ protocol: /^https?$/ }).safeParse(url);
+      if (!parsed.success) throw new Error(`Source line ${i + 1} must start with a full URL`);
+      return { url: parsed.data, publisherName: publisher || new URL(parsed.data).hostname.replace(/^www\./, ""), title: title || publisher || parsed.data, citationId: `S${i + 1}`, sortOrder: i, isPrimary: i === 0 };
+    });
+}
+
+/** Human-written article: bylined to the editor, never labelled as AI-generated. */
+export async function createManualArticle(_prev: ActionState | null, formData: FormData): Promise<ActionState> {
+  return guarded(async () => {
+    const user = await authorize(formData.get("intent") === "publish" ? "articles:publish" : "articles:edit");
+    const parsed = ManualArticle.safeParse(Object.fromEntries(formData));
+    if (!parsed.success) return fail(parsed.error.issues[0]?.message ?? "Check the form.");
+    const d = parsed.data;
+    if (d.imageUrl && !d.imageCredit) return fail("A third-party image needs a credit line.");
+    const sources = parseSources(d.sources ?? "");
+    const prisma = getPrisma();
+    const authorSlug = `staff-${slugify(user.name, 40)}`;
+    const author = await prisma.author.upsert({
+      where: { slug: authorSlug },
+      create: { slug: authorSlug, name: user.name, role: "Editor", bio: `${user.name} is an editor at The Daily Circuit and writes and reviews its coverage.`, isAutomated: false },
+      update: {},
+    });
+    const category = await prisma.category.findUniqueOrThrow({ where: { section: d.section } });
+    const key = `manual:${crypto.randomUUID()}`;
+    const slug = await uniqueSlug(prisma, d.headline, key);
+    const publish = d.intent === "publish";
+    const now = new Date();
+    const plain = markdownToPlainText(`${d.body}\n${d.whyItMatters ?? ""}`);
+    const article = await prisma.article.create({
+      data: {
+        idempotencyKey: key,
+        slug,
+        status: publish ? "PUBLISHED" : "DRAFT",
+        kind: "NEWS",
+        section: d.section,
+        categoryId: category.id,
+        authorId: author.id,
+        headline: d.headline,
+        excerpt: d.excerpt,
+        introduction: "",
+        body: d.body,
+        context: "",
+        whyItMatters: d.whyItMatters ?? "",
+        keyFacts: [],
+        implications: "",
+        risks: "",
+        seoTitle: truncate(d.headline, 70),
+        seoDescription: truncate(d.excerpt, 170),
+        imageAlt: `Illustration for: ${truncate(d.headline, 120)}`,
+        imageUrl: d.imageUrl || null,
+        imageCredit: d.imageCredit || null,
+        readingTimeMinutes: readingTimeMinutes(plain),
+        disclaimerRequired: d.section === "MARKETS" || d.section === "IPO",
+        reviewedById: user.id,
+        reviewedAt: now,
+        publishedAt: publish ? now : null,
+        sources: { create: sources },
+      },
+    });
+    for (const name of [...new Set((d.tags ?? "").split(",").map((t) => t.trim()).filter((t) => t.length >= 2 && t.length <= 40))].slice(0, 6)) {
+      const tagSlug = slugify(name, 40);
+      const tag = await prisma.tag.upsert({ where: { slug: tagSlug }, create: { slug: tagSlug, name }, update: {} });
+      await prisma.articleTag.create({ data: { articleId: article.id, tagId: tag.id } });
+    }
+    await audit(prisma, { actorId: user.id, action: publish ? "article.create-publish" : "article.create", entityType: "Article", entityId: article.id, after: { headline: d.headline, section: d.section } });
+    if (publish) updateTag(CONTENT_TAG);
+    redirect(`/admin/articles/${article.id}?created=${publish ? "published" : "draft"}`);
   });
 }
 

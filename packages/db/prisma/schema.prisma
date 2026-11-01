@@ -607,6 +607,12 @@ model SiteSettings {
   adsensePublisherId   String?
   adSlots              Json?
   newsletterDigestEnabled Boolean @default(false)
+  /// Editor's extra writing instructions, appended to every article request (cannot override accuracy rules).
+  writerGuidance       String   @default("")
+  /// Topics the AI desk should prioritise when selecting stories.
+  aiCoverageFocus      String   @default("")
+  /// Topics the markets desk should prioritise when selecting stories.
+  marketsCoverageFocus String   @default("")
   updatedById          String?  @db.Uuid
   updatedBy            User?    @relation(fields: [updatedById], references: [id], onDelete: SetNull)
   updatedAt            DateTime @updatedAt

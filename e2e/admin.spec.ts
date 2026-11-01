@@ -45,6 +45,31 @@ test.describe("admin authentication and authorisation", () => {
     await expect(page.getByText("Your role does not have access")).toBeVisible();
   });
 
+  test("editors can write and publish their own article, credited to them", async ({ page }) => {
+    await signIn(page, "admin@e2e.test", "e2e-admin-password-123");
+    await expect(page).toHaveURL(/\/admin$/);
+    await page.goto("/admin/articles/new");
+    await page.getByLabel("Section").selectOption("TECHNOLOGY");
+    await page.getByLabel("Headline").fill("Editor's note on how this test publication works");
+    await page.getByLabel("Summary").fill("A short summary written by a human editor for the end-to-end test of manual publishing.");
+    await page.getByLabel("Article", { exact: true }).fill("This article was written by a person in the dashboard to test manual publishing.\n\nIt cites a fixture source [S1] and has two paragraphs so that it reads like a real article.");
+    await page.getByLabel(/Sources/).fill("https://example.com/manual-source | Example Source | A fixture source");
+    await page.getByRole("button", { name: "Publish now" }).click();
+    await expect(page.getByText("Your article is published.")).toBeVisible();
+    // "View live" opens a new tab; follow its address in this one.
+    await page.goto((await page.getByRole("link", { name: "View live" }).getAttribute("href"))!);
+    await expect(page.getByRole("heading", { level: 1 })).toHaveText("Editor's note on how this test publication works");
+    await expect(page.getByText("This article was written by E2E Admin, an editor")).toBeVisible();
+    await expect(page.getByText("(automated, AI-generated)")).toHaveCount(0);
+  });
+
+  test("the how-to guide is available", async ({ page }) => {
+    await signIn(page, "editor@e2e.test", "e2e-editor-password-123");
+    await page.getByRole("link", { name: "How to use" }).click();
+    await expect(page.getByRole("heading", { name: "How to use the dashboard" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Writing your own article" })).toBeVisible();
+  });
+
   test("dashboard pages are never indexed", async ({ request }) => {
     const res = await request.get("/admin/login");
     expect(res.headers()["x-robots-tag"]).toContain("noindex");

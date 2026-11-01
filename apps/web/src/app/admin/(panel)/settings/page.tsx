@@ -47,8 +47,8 @@ export default async function SettingsPage() {
                 <p className="text-xs text-ink-3">The pipeline starts 60 minutes before this time.</p>
               </div>
               <div className="grid grid-cols-2 gap-4">
-                <NumberField name="maxAiArticles" label="AI articles per day (max)" value={s.maxAiArticles} min={0} max={10} />
-                <NumberField name="maxMarketArticles" label="Market articles per day (max)" value={s.maxMarketArticles} min={0} max={10} />
+                <NumberField name="maxAiArticles" label="AI articles per day (max)" value={s.maxAiArticles} min={0} max={20} hint="Up to 20." />
+                <NumberField name="maxMarketArticles" label="Market articles per day (max)" value={s.maxMarketArticles} min={0} max={20} hint="Up to 20." />
               </div>
               <NumberField name="latePublishGraceMin" label="Late-start grace (minutes)" value={s.latePublishGraceMin} min={0} max={720} hint="If the worker was down, the edition is skipped when it cannot start within this window after the publish time." />
               <Toggle name="autoPublish" label="Publish automatically when every check passes" checked={s.autoPublish} hint="When off, every article waits for an editor's approval." />
@@ -71,6 +71,26 @@ export default async function SettingsPage() {
               <NumberField name="minSelectionScore" label="Minimum score to publish" value={s.minSelectionScore} step="0.01" min={0} max={1} hint="Stories below this are not published, even if the quota is not filled." />
               <Toggle name="enableFactCheckPass" label="Run the second-model fact-check on every draft" checked={s.enableFactCheckPass} />
               <NumberField name="monthlyBudgetUsd" label="Monthly AI model budget (USD)" value={s.monthlyBudgetUsd} step="1" min={0} hint="Article generation pauses for the rest of the month once this is reached." />
+            </CardContent>
+          </Card>
+          <Card className="xl:col-span-2">
+            <CardHeader>
+              <CardTitle>AI instructions</CardTitle>
+              <p className="text-xs text-ink-3">Steer what the AI covers and how it writes. These notes cannot override the accuracy rules (citations, no invented quotes or figures, no investment advice).</p>
+            </CardHeader>
+            <CardContent className="grid gap-4 md:grid-cols-2">
+              <div className="space-y-1.5 md:col-span-2">
+                <Label htmlFor="writerGuidance">Writing style and instructions</Label>
+                <Textarea id="writerGuidance" name="writerGuidance" rows={5} maxLength={2000} defaultValue={s.writerGuidance} placeholder={"e.g. Explain technical terms in one plain sentence. Mention what each story means for Indian startups and developers. Keep headlines under 12 words."} />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="aiCoverageFocus">AI and technology desk: topics to prioritise</Label>
+                <Textarea id="aiCoverageFocus" name="aiCoverageFocus" rows={4} maxLength={1000} defaultValue={s.coverageFocus.AI} placeholder="e.g. Indian AI startups, open-source models, AI regulation in India, semiconductors" />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="marketsCoverageFocus">Markets desk: topics to prioritise</Label>
+                <Textarea id="marketsCoverageFocus" name="marketsCoverageFocus" rows={4} maxLength={1000} defaultValue={s.coverageFocus.MARKETS} placeholder="e.g. RBI policy, SEBI orders, IPOs, banking and fintech" />
+              </div>
             </CardContent>
           </Card>
           <Card>

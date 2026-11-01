@@ -10,7 +10,7 @@ import { cn } from "@/lib/utils";
 
 export function ThemeProvider({ children }: { children: ReactNode }) {
   return (
-    <NextThemes attribute="data-theme" defaultTheme="system" enableSystem disableTransitionOnChange>
+    <NextThemes attribute="data-theme" defaultTheme="light" enableSystem disableTransitionOnChange>
       {children}
     </NextThemes>
   );
@@ -24,8 +24,8 @@ function useMounted() {
 export function ThemeToggle() {
   const { theme, setTheme } = useTheme();
   const mounted = useMounted();
-  const order = ["system", "light", "dark"] as const;
-  const current = mounted ? ((theme as (typeof order)[number]) ?? "system") : "system";
+  const order = ["light", "dark", "system"] as const;
+  const current = mounted ? ((theme as (typeof order)[number]) ?? "light") : "light";
   const next = order[(order.indexOf(current) + 1) % order.length]!;
   const Icon = current === "dark" ? Moon : current === "light" ? Sun : Monitor;
   return (

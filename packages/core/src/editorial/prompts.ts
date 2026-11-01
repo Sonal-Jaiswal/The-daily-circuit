@@ -101,11 +101,16 @@ export function writerPrompt(input: {
   editionDate: string;
   sources: PromptSource[];
   stock?: StockContext | null;
+  /** Editor's house-style notes from Settings. Never overrides the accuracy rules. */
+  guidance?: string;
 }): string {
   const stock = input.stock
     ? `\n\nMarket data for the stock featured in this story (from licensed provider ${input.stock.provider}, timestamp ${input.stock.dataTimestamp.toISOString()}). Treat these figures as a source with id "S0":\n<market_data company="${esc(input.stock.companyName)}" exchange="${input.stock.exchange}" symbol="${input.stock.symbol}" last_price="${input.stock.lastPrice}" previous_close="${input.stock.previousClose}" change_percent="${input.stock.changePercent}"${input.stock.volume ? ` volume="${input.stock.volume}"` : ""} />\nThis is a "Why is this stock moving?" story. Explain the move only with reasons the sources state; if none do, say no reason has been disclosed.`
     : "";
-  return `Desk: ${input.desk}. Section: ${input.section}. Edition date (IST): ${input.editionDate}.
+  const guidance = input.guidance?.trim()
+    ? `\n\n<editor_guidance>\nStyle and focus notes from the editor. Follow them where they are compatible with the accuracy rules; the accuracy rules always win.\n${esc(input.guidance.trim().slice(0, 2000))}\n</editor_guidance>`
+    : "";
+  return `Desk: ${input.desk}. Section: ${input.section}. Edition date (IST): ${input.editionDate}.${guidance}
 
 Write the article from these sources:
 

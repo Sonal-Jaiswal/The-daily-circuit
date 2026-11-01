@@ -25,26 +25,7 @@
   color-scheme: light;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) {
-    --paper: #0f1226;
-    --surface: #161a33;
-    --ink: #e8eaf4;
-    --ink-2: #b7bcd6;
-    --ink-3: #8f95b5;
-    --rule: #2a2f52;
-    --neel: #a3acf7;
-    --neel-soft: #232a5c;
-    --marigold: #e9b54a;
-    --marigold-ink: #e9b54a;
-    --marigold-soft: #3a2c0c;
-    --up: #4cc38a;
-    --down: #f07167;
-    --focus: #a3acf7;
-    color-scheme: dark;
-  }
-}
-
+/* Light is the default. Dark applies when chosen, or when "system" resolves to dark (next-themes sets data-theme). */
 :root[data-theme="dark"] {
   --paper: #0f1226;
   --surface: #161a33;
