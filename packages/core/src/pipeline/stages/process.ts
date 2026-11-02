@@ -5,6 +5,7 @@ import { ClassificationSchema, type Classification } from "../../editorial/schem
 import { CLASSIFIER_SYSTEM } from "../../editorial/prompts";
 import { researchCandidate } from "../../editorial/research";
 import { clusterItems, matchesPublished, normalizeSignature } from "../../intelligence/dedupe";
+import { routineNoticeReason } from "../../intelligence/routine";
 import { addMinutes, istWallTimeToUtc, toDbDate } from "../../time/ist";
 import { truncate } from "../../util/text";
 import { requireLlm, type PipelineContext, type StageResult } from "../context";
@@ -73,6 +74,20 @@ async function dropAlreadyCovered(ctx: PipelineContext, candidates: CandidateWit
     } else remaining.push(c);
   }
   return { remaining, duplicates };
+}
+
+/** Step 2b: set aside routine regulatory paperwork before spending a model call on it. */
+async function dropRoutineNotices(ctx: PipelineContext, candidates: CandidateWithSource[]) {
+  const remaining: CandidateWithSource[] = [];
+  let routine = 0;
+  for (const c of candidates) {
+    const reason = routineNoticeReason(c.originalHeadline, c.source.kind);
+    if (reason) {
+      routine += 1;
+      await ctx.prisma.newsCandidate.update({ where: { id: c.id }, data: { status: "IRRELEVANT", rankingExplanation: `Routine notice, not a news story: ${reason}` } });
+    } else remaining.push(c);
+  }
+  return { remaining, routine };
 }
 
 function classifyPrompt(batch: CandidateWithSource[]): string {
@@ -168,7 +183,8 @@ export async function processStage(ctx: PipelineContext): Promise<StageResult> {
     orderBy: { collectedAt: "asc" },
   });
   const { live, stale } = await validateDates(ctx, candidates);
-  const { remaining, duplicates } = await dropAlreadyCovered(ctx, live);
+  const { remaining: uncovered, duplicates } = await dropAlreadyCovered(ctx, live);
+  const { remaining, routine } = await dropRoutineNotices(ctx, uncovered);
 
   let classified = 0;
   let irrelevant = 0;
@@ -201,7 +217,7 @@ export async function processStage(ctx: PipelineContext): Promise<StageResult> {
   const problems = missing ? [`${missing} candidate(s) were not returned by the classifier and remain queued`] : [];
   return {
     status: missing ? "PARTIAL" : "SUCCEEDED",
-    summary: { examined: candidates.length, stale, duplicates, classified, irrelevant, missing, clustersCreated },
+    summary: { examined: candidates.length, stale, duplicates, routine, classified, irrelevant, missing, clustersCreated },
     problems,
   };
 }

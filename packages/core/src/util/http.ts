@@ -21,8 +21,16 @@ export interface FetchTextResult {
   notModified: boolean;
 }
 
+export interface FetchBytesResult {
+  status: number;
+  url: string;
+  body: Buffer;
+  headers: Headers;
+  notModified: boolean;
+}
+
 /** GET with timeout, size cap and an honest user agent. Throws HttpError on non-2xx (except 304). */
-export async function fetchText(url: string, options: FetchTextOptions = {}): Promise<FetchTextResult> {
+export async function fetchBytes(url: string, options: FetchTextOptions = {}): Promise<FetchBytesResult> {
   const { timeoutMs = 15_000, maxBytes = 3_000_000, headers = {}, fetchImpl = fetch } = options;
   const response = await fetchImpl(url, {
     headers: { "User-Agent": crawlerUserAgent(), Accept: "*/*", ...headers },
@@ -30,7 +38,7 @@ export async function fetchText(url: string, options: FetchTextOptions = {}): Pr
     signal: AbortSignal.timeout(timeoutMs),
   });
   if (response.status === 304) {
-    return { status: 304, url: response.url || url, text: "", headers: response.headers, notModified: true };
+    return { status: 304, url: response.url || url, body: Buffer.alloc(0), headers: response.headers, notModified: true };
   }
   if (!response.ok) {
     throw new HttpError(`GET ${url} returned ${response.status}`, response.status, url);
@@ -41,7 +49,7 @@ export async function fetchText(url: string, options: FetchTextOptions = {}): Pr
   }
   const reader = response.body?.getReader();
   if (!reader) {
-    return { status: response.status, url: response.url || url, text: await response.text(), headers: response.headers, notModified: false };
+    return { status: response.status, url: response.url || url, body: Buffer.from(await response.arrayBuffer()), headers: response.headers, notModified: false };
   }
   const chunks: Uint8Array[] = [];
   let received = 0;
@@ -55,6 +63,11 @@ export async function fetchText(url: string, options: FetchTextOptions = {}): Pr
     }
     chunks.push(value);
   }
-  const text = new TextDecoder("utf-8").decode(Buffer.concat(chunks));
-  return { status: response.status, url: response.url || url, text, headers: response.headers, notModified: false };
+  return { status: response.status, url: response.url || url, body: Buffer.concat(chunks), headers: response.headers, notModified: false };
+}
+
+/** Like fetchBytes, decoded as UTF-8. */
+export async function fetchText(url: string, options: FetchTextOptions = {}): Promise<FetchTextResult> {
+  const { body, ...rest } = await fetchBytes(url, options);
+  return { ...rest, text: new TextDecoder("utf-8").decode(body) };
 }

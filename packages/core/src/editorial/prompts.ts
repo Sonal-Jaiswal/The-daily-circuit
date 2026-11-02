@@ -6,7 +6,7 @@ export const CLASSIFIER_SYSTEM = `You triage incoming news items for The Daily C
 
 For each item you receive (headline, source, summary), return one classification:
 - section: the best fit, or IRRELEVANT if it belongs to neither desk (e.g. sport, lifestyle, non-Indian markets with no Indian angle).
-- isNews: false for evergreen guides, tutorials, promotions, webinars, hiring posts, podcasts and opinion columns.
+- isNews: false for evergreen guides, tutorials, promotions, webinars, hiring posts, podcasts and opinion columns, and for routine regulatory paperwork: recurring statistical releases, auction calendars, and recovery, demand or appeal proceedings against individuals. New circulars, frameworks, rule changes, policy decisions and orders against listed companies are news.
 - importance (0–10): how significant the development is. 9–10 only for landmark events (major model launches, RBI policy decisions, large regulatory actions).
 - impact (0–10): consequences for the industry, investors or the economy.
 - interest (0–10): likely interest for professional readers in India.

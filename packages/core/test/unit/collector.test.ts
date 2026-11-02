@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { parseFeed, parseFeedDate } from "../../src/collector/feed-parser";
 import { parseRobots } from "../../src/collector/robots";
-import { extractPage } from "../../src/editorial/research";
+import { embeddedPdfUrl, extractPage, researchCandidate } from "../../src/editorial/research";
+import { routineNoticeReason } from "../../src/intelligence/routine";
 
 const RSS = `<?xml version="1.0"?><rss version="2.0"><channel><title>SEBI RSS Feed</title>
 <lastBuildDate>31 Oct 2026 22:00:02</lastBuildDate><pubDate>31 Oct 2026 22:00:02 +0530</pubDate>
@@ -99,5 +100,76 @@ describe("page extraction", () => {
   it("falls back to JSON-LD datePublished", () => {
     const page = extractPage(`<html><head><script type="application/ld+json">{"@type":"NewsArticle","datePublished":"2026-10-31T12:00:00Z"}</script></head><body><p>x</p></body></html>`);
     expect(page.publishedAt?.toISOString()).toBe("2026-10-31T12:00:00.000Z");
+  });
+});
+
+/** A minimal, valid one-page PDF with one line per entry, with a correct cross-reference table. */
+function tinyPdf(lines: string[]): Buffer {
+  const stream = `BT /F1 10 Tf 14 TL 40 750 Td ${lines.map((l) => `(${l}) Tj T*`).join(" ")} ET`;
+  const objects = [
+    "<< /Type /Catalog /Pages 2 0 R >>",
+    "<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
+    "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 4 0 R /Resources << /Font << /F1 5 0 R >> >> >>",
+    `<< /Length ${stream.length} >>\nstream\n${stream}\nendstream`,
+    "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>",
+  ];
+  let pdf = "%PDF-1.4\n";
+  const offsets: number[] = [];
+  objects.forEach((body, i) => {
+    offsets.push(pdf.length);
+    pdf += `${i + 1} 0 obj\n${body}\nendobj\n`;
+  });
+  const xref = pdf.length;
+  pdf += `xref\n0 ${objects.length + 1}\n0000000000 65535 f \n${offsets.map((o) => `${String(o).padStart(10, "0")} 00000 n \n`).join("")}`;
+  pdf += `trailer\n<< /Size ${objects.length + 1} /Root 1 0 R >>\nstartxref\n${xref}\n%%EOF\n`;
+  return Buffer.from(pdf, "latin1");
+}
+
+describe("regulator documents", () => {
+  const CIRCULAR = [
+    "Page 1 of 2",
+    "SEBI circular on the cooling off period for offer for sale by privately listed InvITs,",
+    "issued to all recognised stock exchanges, depositories and clearing corporations,",
+    "effective immediately for every infrastructure investment trust in India.",
+  ];
+  const viewer = `<html><body><h1>Cooling off period</h1><iframe src='../../../web/?file=https://www.sebi.gov.in/sebi_data/attachdocs/nov-2026/1793619502649.pdf'></iframe></body></html>`;
+
+  it("finds a same-site PDF behind a viewer page, and ignores other sites", () => {
+    expect(embeddedPdfUrl(viewer, "https://www.sebi.gov.in/legal/circulars/nov-2026/x_105539.html")).toBe("https://www.sebi.gov.in/sebi_data/attachdocs/nov-2026/1793619502649.pdf");
+    expect(embeddedPdfUrl(`<a href="https://elsewhere.example/doc.pdf">PDF</a>`, "https://www.sebi.gov.in/a.html")).toBeNull();
+    expect(embeddedPdfUrl(`<p>No document</p>`, "https://www.sebi.gov.in/a.html")).toBeNull();
+  });
+
+  it("reads the embedded PDF when the page itself has no text", async () => {
+    const requested: string[] = [];
+    const fetchImpl = (async (u: unknown) => {
+      const url = String(u);
+      requested.push(url);
+      if (url.endsWith("/robots.txt")) return new Response("User-agent: *\nAllow: /", { status: 200 });
+      if (url.endsWith(".pdf")) return new Response(new Uint8Array(tinyPdf(CIRCULAR)), { status: 200, headers: { "content-type": "application/pdf" } });
+      return new Response(viewer, { status: 200, headers: { "content-type": "text/html" } });
+    }) as typeof fetch;
+    const res = await researchCandidate("https://www.sebi.gov.in/legal/circulars/nov-2026/x_105539.html", "Cooling off period for offer for sale by Private listed InvITs", { allowPageFetch: true, fetchImpl });
+    expect(res.note).toBe("embedded PDF document text");
+    expect(res.text).toContain("cooling off period for offer for sale by privately listed InvITs");
+    expect(requested.some((u) => u.endsWith("1793619502649.pdf"))).toBe(true);
+  });
+
+  it("sets aside routine paperwork from official sources only", () => {
+    for (const h of [
+      "Money Market Operations as on November 01, 2026",
+      "SEBI Order for Compliance - Release Order for Recovery Certificate No. 9226 of 2026 against Jigar Bhailalbhai Khalash",
+      "Notice of Demand dated November 02, 2026 issued under RC No. 9315 of 2026",
+      "Appeal No. 7127 of 2026 filed by Himanshu Soni",
+      "Auction of Government of India Dated Securities",
+      "Processing of Applications Received Under the Citizen’s Charter Status as on October 31, 2026",
+    ]) expect(routineNoticeReason(h, "REGULATOR"), h).not.toBeNull();
+    for (const h of [
+      "Framework for Issuance of Depository Receipts on Units of REITs",
+      "Cooling off period for offer for sale by Private listed InvITs",
+      "Adjudication Order in the matter of Praveg Limited",
+      "RBI keeps repo rate unchanged at 5.25%",
+    ]) expect(routineNoticeReason(h, "REGULATOR"), h).toBeNull();
+    expect(routineNoticeReason("Money Market Operations as on November 01, 2026", "PUBLISHER")).toBeNull();
   });
 });
