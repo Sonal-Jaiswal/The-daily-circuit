@@ -6,19 +6,20 @@ import { CLASSIFIER_SYSTEM } from "../../editorial/prompts";
 import { researchCandidate } from "../../editorial/research";
 import { clusterItems, matchesPublished, normalizeSignature } from "../../intelligence/dedupe";
 import { routineNoticeReason } from "../../intelligence/routine";
-import { addMinutes, istWallTimeToUtc, toDbDate } from "../../time/ist";
+import { addDays, addMinutes, istWallTimeToUtc, toDbDate } from "../../time/ist";
 import { truncate } from "../../util/text";
 import { requireLlm, type PipelineContext, type StageResult } from "../context";
 
 type CandidateWithSource = NewsCandidate & { source: NewsSource };
 
-export const FRESHNESS_WINDOW_HOURS = 30;
+/** Stories older than the 30-hour freshness window are kept up to here as a reserve for a desk's daily minimum. */
+export const RESERVE_WINDOW_HOURS = 72;
 const CLASSIFY_BATCH = 20;
 
 /** Step 1: publication-date validation. Unknown dates are looked up on the page when permitted. */
 async function validateDates(ctx: PipelineContext, candidates: CandidateWithSource[]) {
   const publishAt = istWallTimeToUtc(ctx.editionDate, ctx.settings.publishTimeIst);
-  const windowStart = addMinutes(publishAt, -FRESHNESS_WINDOW_HOURS * 60);
+  const windowStart = addMinutes(publishAt, -RESERVE_WINDOW_HOURS * 60);
   const now = ctx.now();
   const live: CandidateWithSource[] = [];
   let stale = 0;
@@ -35,7 +36,7 @@ async function validateDates(ctx: PipelineContext, candidates: CandidateWithSour
     let reason: string | null = null;
     if (!publishedAt) reason = "Publication time was not stated by the source and could not be verified";
     else if (publishedAt > addMinutes(now, 15)) reason = "Stated publication time is in the future";
-    else if (publishedAt < windowStart) reason = `Published more than ${FRESHNESS_WINDOW_HOURS} hours before the edition`;
+    else if (publishedAt < windowStart) reason = `Published more than ${RESERVE_WINDOW_HOURS} hours before the edition`;
     if (reason) {
       stale += 1;
       await ctx.prisma.newsCandidate.update({ where: { id: c.id }, data: { status: "STALE", rankingExplanation: reason, publishedAt, publishedAtSource } });
@@ -74,6 +75,32 @@ async function dropAlreadyCovered(ctx: PipelineContext, candidates: CandidateWit
     } else remaining.push(c);
   }
   return { remaining, duplicates };
+}
+
+/**
+ * Step 2c: unused stories from the last few editions join tonight's pool, so a quiet day can still
+ * draw on real news collected earlier. Ranking scores their age; already-covered events are dropped.
+ */
+async function carryOverUnused(ctx: PipelineContext): Promise<{ carried: number; duplicates: number }> {
+  const edition = toDbDate(ctx.editionDate);
+  const publishAt = istWallTimeToUtc(ctx.editionDate, ctx.settings.publishTimeIst);
+  const leftovers = await ctx.prisma.newsCandidate.findMany({
+    where: {
+      editionDate: { lt: edition, gte: toDbDate(addDays(ctx.editionDate, -3)) },
+      status: { in: ["CLASSIFIED", "NOT_SELECTED"] },
+      publishedAt: { gte: addMinutes(publishAt, -RESERVE_WINDOW_HOURS * 60) },
+      OR: [{ clusterId: null }, { cluster: { article: null } }],
+    },
+    include: { source: true },
+  });
+  const { remaining, duplicates } = await dropAlreadyCovered(ctx, leftovers);
+  for (const c of remaining) {
+    await ctx.prisma.newsCandidate.update({
+      where: { id: c.id },
+      data: { editionDate: edition, clusterId: null, isClusterPrimary: false, status: "CLASSIFIED", rankPosition: null, rankingExplanation: `Carried over unused from the ${c.editionDate.toISOString().slice(0, 10)} edition` },
+    });
+  }
+  return { carried: remaining.length, duplicates };
 }
 
 /** Step 2b: set aside routine regulatory paperwork before spending a model call on it. */
@@ -213,11 +240,12 @@ export async function processStage(ctx: PipelineContext): Promise<StageResult> {
       else irrelevant += 1;
     }
   }
+  const carry = await carryOverUnused(ctx);
   const clustersCreated = (await clusterDesk(ctx, "AI")) + (await clusterDesk(ctx, "MARKETS"));
   const problems = missing ? [`${missing} candidate(s) were not returned by the classifier and remain queued`] : [];
   return {
     status: missing ? "PARTIAL" : "SUCCEEDED",
-    summary: { examined: candidates.length, stale, duplicates, routine, classified, irrelevant, missing, clustersCreated },
+    summary: { examined: candidates.length, stale, duplicates: duplicates + carry.duplicates, routine, carriedOver: carry.carried, classified, irrelevant, missing, clustersCreated },
     problems,
   };
 }

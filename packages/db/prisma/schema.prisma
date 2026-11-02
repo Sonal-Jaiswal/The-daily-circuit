@@ -594,6 +594,8 @@ model SiteSettings {
   publishTimeIst       String   @default("21:00")
   maxAiArticles        Int      @default(10)
   maxMarketArticles    Int      @default(10)
+  /// Each desk keeps searching (lower-scoring and older reserve stories, replacements for failed drafts) until it has this many.
+  minArticlesPerDesk   Int      @default(5)
   minSelectionScore    Float    @default(0.55)
   scoringWeights       Json
   autoPublish          Boolean  @default(true)

@@ -25,8 +25,8 @@ export interface CollectStats {
   results: SourceResult[];
 }
 
-/** Only keep items published within this window before the edition's publish time. */
-export const LOOKBACK_HOURS = 36;
+/** Only keep items published within this window before the edition's publish time (older ones are a reserve for the daily minimum). */
+export const LOOKBACK_HOURS = 72;
 
 export async function collectSource(
   prisma: PrismaClient,

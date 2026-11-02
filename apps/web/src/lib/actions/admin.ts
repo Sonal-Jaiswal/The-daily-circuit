@@ -423,6 +423,7 @@ export async function saveSettings(_prev: ActionState | null, formData: FormData
       publishTimeIst,
       maxAiArticles: num("maxAiArticles", 0, 20),
       maxMarketArticles: num("maxMarketArticles", 0, 20),
+      minArticlesPerDesk: num("minArticlesPerDesk", 0, 20),
       writerGuidance: String(f.writerGuidance ?? "").trim().slice(0, 2000),
       aiCoverageFocus: String(f.aiCoverageFocus ?? "").trim().slice(0, 1000),
       marketsCoverageFocus: String(f.marketsCoverageFocus ?? "").trim().slice(0, 1000),

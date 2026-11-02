@@ -33,7 +33,7 @@ export default function EditorialPolicyPage() {
       <ul>
         <li>Importance: 30%</li>
         <li>Source credibility: 25% (official and original sources rank highest; independent corroboration adds weight)</li>
-        <li>Freshness: 20% (stories older than 30 hours are excluded)</li>
+        <li>Freshness: 20% (stories older than 30 hours are used only when a desk has too few fresher ones, and never after 72 hours)</li>
         <li>Industry impact: 15%</li>
         <li>Reader interest: 10%</li>
       </ul>

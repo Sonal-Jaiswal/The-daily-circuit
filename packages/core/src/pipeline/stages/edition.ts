@@ -1,11 +1,12 @@
-import type { DailyEdition, PrismaClient } from "@tdc/db";
+import type { ArticleStatus, DailyEdition, PrismaClient } from "@tdc/db";
 import { adminAlertRecipients, getEnv, siteUrl } from "../../env";
 import { articleUrl, deskForSection, editionPath, sectionInfo } from "../../content/paths";
 import { adminReportEmail, dailyDigestEmail } from "../../email/templates";
 import { oneClickUnsubscribeUrl, unsubscribeUrl } from "../../newsletter/service";
 import { validateArticle } from "../../publishing/articles";
-import { formatIstDate, istWallTimeToUtc, toDbDate } from "../../time/ist";
+import { addMinutes, formatIstDate, istWallTimeToUtc, toDbDate } from "../../time/ist";
 import type { PipelineContext, StageResult } from "../context";
+import { deskArticleCount, topUpDesks } from "./generate";
 
 export function editionTitle(editionDate: string): string {
   return `Evening edition, ${formatIstDate(istWallTimeToUtc(editionDate, "12:00"))}`;
@@ -20,11 +21,9 @@ export async function ensureEdition(prisma: PrismaClient, editionDate: string, s
   });
 }
 
-export async function validateStage(ctx: PipelineContext): Promise<StageResult> {
-  const publishAt = istWallTimeToUtc(ctx.editionDate, ctx.settings.publishTimeIst);
-  const edition = await ensureEdition(ctx.prisma, ctx.editionDate, publishAt);
-  const drafts = await ctx.prisma.article.findMany({ where: { editionId: edition.id, status: "DRAFT" }, select: { id: true } });
-  const counts = { approved: 0, needsReview: 0, failed: 0 };
+async function validateDrafts(ctx: PipelineContext, editionId: string, publishAt: Date) {
+  const drafts = await ctx.prisma.article.findMany({ where: { editionId, status: "DRAFT" }, select: { id: true } });
+  const counts = { validated: drafts.length, approved: 0, needsReview: 0, failed: 0 };
   for (const d of drafts) {
     const { status } = await validateArticle(ctx.prisma, d.id, {
       llm: ctx.llm,
@@ -39,7 +38,33 @@ export async function validateStage(ctx: PipelineContext): Promise<StageResult> 
     else if (status === "NEEDS_REVIEW") counts.needsReview += 1;
     else counts.failed += 1;
   }
-  return { status: "SUCCEEDED", summary: { validated: drafts.length, ...counts } };
+  return counts;
+}
+
+export async function validateStage(ctx: PipelineContext): Promise<StageResult> {
+  const publishAt = istWallTimeToUtc(ctx.editionDate, ctx.settings.publishTimeIst);
+  const edition = await ensureEdition(ctx.prisma, ctx.editionDate, publishAt);
+  const counts = await validateDrafts(ctx, edition.id, publishAt);
+  // Drafts that failed validation are replaced by the next-best stories while there is time.
+  // With auto-publish off, articles waiting for an editor count towards the minimum.
+  const onCourse: ArticleStatus[] = ctx.settings.autoPublish ? ["APPROVED", "PUBLISHED"] : ["NEEDS_REVIEW", "APPROVED", "PUBLISHED"];
+  let replacements = 0;
+  const problems: string[] = [];
+  if (ctx.llm) {
+    const deadline = addMinutes(publishAt, -4);
+    while (ctx.now() < deadline) {
+      const topUp = await topUpDesks(ctx, { deadline, count: (desk) => deskArticleCount(ctx, desk, [...onCourse, "DRAFT"]) });
+      problems.push(...topUp.problems);
+      if (!topUp.written) break;
+      replacements += topUp.written;
+      const more = await validateDrafts(ctx, edition.id, publishAt);
+      counts.validated += more.validated;
+      counts.approved += more.approved;
+      counts.needsReview += more.needsReview;
+      counts.failed += more.failed;
+    }
+  }
+  return { status: "SUCCEEDED", summary: { ...counts, replacements }, problems };
 }
 
 export async function prepareEditionStage(ctx: PipelineContext): Promise<StageResult> {

@@ -50,6 +50,7 @@ export default async function SettingsPage() {
                 <NumberField name="maxAiArticles" label="AI articles per day (max)" value={s.maxAiArticles} min={0} max={20} hint="Up to 20." />
                 <NumberField name="maxMarketArticles" label="Market articles per day (max)" value={s.maxMarketArticles} min={0} max={20} hint="Up to 20." />
               </div>
+              <NumberField name="minArticlesPerDesk" label="Articles per desk per day (minimum)" value={s.minArticlesPerDesk} min={0} max={20} hint="When too few stories pass, each desk also considers weaker and up to 3-day-old stories, and writes replacements for failed drafts, until it reaches this number or runs out of real news. Non-news items are never used." />
               <NumberField name="latePublishGraceMin" label="Late-start grace (minutes)" value={s.latePublishGraceMin} min={0} max={720} hint="If the worker was down, the edition is skipped when it cannot start within this window after the publish time." />
               <Toggle name="autoPublish" label="Publish automatically when every check passes" checked={s.autoPublish} hint="When off, every article waits for an editor's approval." />
               <Toggle name="newsletterDigestEnabled" label="Email the edition to confirmed subscribers" checked={s.newsletterDigestEnabled} hint="Requires a configured email provider." />
@@ -68,7 +69,7 @@ export default async function SettingsPage() {
                 <NumberField name="wInterest" label="Interest" value={s.weights.interest} step="0.05" min={0} max={1} />
               </div>
               <p className="text-xs text-ink-3">Weights must add up to 1.</p>
-              <NumberField name="minSelectionScore" label="Minimum score to publish" value={s.minSelectionScore} step="0.01" min={0} max={1} hint="Stories below this are not published, even if the quota is not filled." />
+              <NumberField name="minSelectionScore" label="Minimum score to publish" value={s.minSelectionScore} step="0.01" min={0} max={1} hint="The usual bar. To reach the daily minimum, stories down to 0.35 can also be used." />
               <Toggle name="enableFactCheckPass" label="Run the second-model fact-check on every draft" checked={s.enableFactCheckPass} />
               <NumberField name="monthlyBudgetUsd" label="Monthly AI model budget (USD)" value={s.monthlyBudgetUsd} step="1" min={0} hint="Article generation pauses for the rest of the month once this is reached." />
             </CardContent>

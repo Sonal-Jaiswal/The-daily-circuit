@@ -57,6 +57,8 @@ function respond(call: StructuredCall<unknown>) {
   if (call.purpose === "write-article") {
     if (call.prompt.includes("Atlas")) return aiDraft("Acme AI releases Atlas 3 with a longer context window", "[S1][S2]");
     if (call.prompt.includes("Volt")) return aiDraft("Volt reports record data-centre revenue for the quarter", "[S1]");
+    if (call.prompt.includes("Bengaluru")) return aiDraft("Acme AI opens a research lab in Bengaluru", "[S1]");
+    if (call.prompt.includes("gold loans")) return aiDraft("RBI tightens its rules for gold loans", "[S1]");
     if (call.prompt.includes("SEBI")) return goodDraft();
     if (call.prompt.includes("RBI")) return new LlmError("Model declined the request (category: unspecified)", "refusal");
   }
@@ -117,6 +119,7 @@ beforeAll(async () => {
   server.routes.set("/a/volt", { body: articlePage("Volt results", [LONG("Volt reported record data-centre revenue for the quarter."), LONG("The company credited demand for AI accelerators.")]) });
   server.routes.set("/a/bengaluru", { body: articlePage("Lab", [LONG("Acme AI opened a research lab in Bengaluru.")], "2026-11-01T09:00:00Z") });
   server.routes.set("/m/sebi", { body: articlePage("SEBI order", [SOURCE_TEXT]) });
+  server.routes.set("/m/gold", { body: articlePage("Gold loans", [LONG("The Reserve Bank of India tightened its rules for gold loans issued by banks and finance companies.")]) });
   server.routes.set("/m/rbi", { body: articlePage("RBI", [LONG("The Reserve Bank of India announced the redemption price for a Sovereign Gold Bond tranche.")]) });
 });
 
@@ -132,6 +135,8 @@ beforeEach(async () => {
 
 describe("daily pipeline end to end", () => {
   it("collects, deduplicates, ranks, writes, validates and publishes — with partial publication", async () => {
+    // This scenario checks the usual quality bar on its own; the daily minimum is covered below.
+    await db().siteSettings.update({ where: { id: "default" }, data: { minArticlesPerDesk: 0 } });
     const ctx = await makeContext({ respond });
     const p = db();
 
@@ -248,4 +253,69 @@ describe("daily pipeline end to end", () => {
     const res = await runStage("PROCESS", next);
     expect(res.summary).toMatchObject({ duplicates: 1 });
   });
+
+  /** An unused story from the previous edition, published 51.5 hours before tonight's. */
+  async function seedLeftover() {
+    const regulator = await db().newsSource.findUniqueOrThrow({ where: { slug: "regulator" } });
+    await db().newsCandidate.create({
+      data: {
+        sourceId: regulator.id,
+        originalUrl: `${server.url}/m/gold`,
+        canonicalUrl: `${server.url}/m/gold`,
+        originalHeadline: "RBI tightens rules for gold loans",
+        normalizedHeadline: "rbi tightens rules for gold loans",
+        publishedAt: new Date("2026-10-30T12:00:00Z"),
+        publishedAtSource: "FEED_PUBLISHED",
+        desk: "MARKETS",
+        section: "MARKETS",
+        editionDate: new Date("2026-10-31T00:00:00Z"),
+        status: "NOT_SELECTED",
+        sourceReliability: 0.95,
+        isOriginalReporting: true,
+        classification: { section: "MARKETS", isNews: true, importance: 6, impact: 5, interest: 6, eventSignature: "rbi-gold-loan-rules" },
+      },
+    });
+  }
+
+  it("reaches the daily minimum with weaker and carried-over stories, but never with non-news", async () => {
+    await seedLeftover();
+    const ctx = await makeContext({ respond });
+    const p = db();
+    await runStage("COLLECT", ctx);
+    expect((await runStage("PROCESS", ctx)).summary).toMatchObject({ carriedOver: 1, irrelevant: 2 });
+    await runStage("RANK", ctx);
+    const status = async (text: string) => p.newsCandidate.findFirstOrThrow({ where: { originalHeadline: { contains: text }, isClusterPrimary: true } });
+    expect((await status("Bengaluru")).status).toBe("SELECTED");
+    expect((await status("Bengaluru")).rankingExplanation).toMatch(/daily minimum of 5/);
+    const gold = await status("gold loans");
+    expect(gold.status).toBe("SELECTED");
+    expect(gold.editionDate.toISOString().slice(0, 10)).toBe("2026-11-01");
+    // The webinar and the football item are not news and stay out, minimum or not.
+    expect(await p.newsCandidate.count({ where: { status: "SELECTED", originalHeadline: { contains: "webinar" } } })).toBe(0);
+    expect(await p.newsCandidate.count({ where: { status: "SELECTED", originalHeadline: { contains: "Football" } } })).toBe(0);
+    expect((await runStage("GENERATE", ctx)).summary).toMatchObject({ written: 5, failed: 1, replacements: 0 });
+  });
+
+  it("writes the next-best story when a draft fails, until the desk reaches its minimum", async () => {
+    await setMinimum(2);
+    await seedLeftover();
+    // 20:30 IST, the writing slot: replacements stop 12 minutes before publication.
+    const ctx = await makeContext({ respond, now: () => new Date("2026-11-01T15:00:00Z") });
+    for (const stage of ["COLLECT", "PROCESS", "RANK"] as const) await runStage(stage, ctx);
+    // Two markets stories clear the bar, so the two-day-old one waits in reserve.
+    expect((await db().newsCandidate.findFirstOrThrow({ where: { originalHeadline: { contains: "gold loans" } } })).status).toBe("NOT_SELECTED");
+    // The RBI draft fails, so the reserve story replaces it. The AI desk already has two.
+    expect((await runStage("GENERATE", ctx)).summary).toMatchObject({ written: 4, failed: 1, replacements: 1 });
+    const gold = await db().newsCandidate.findFirstOrThrow({ where: { originalHeadline: { contains: "gold loans" } } });
+    expect(gold.status).toBe("USED");
+    expect(gold.rankingExplanation).toMatch(/replacement to reach the daily minimum of 2/);
+    expect((await db().newsCandidate.findFirstOrThrow({ where: { originalHeadline: { contains: "Bengaluru" } } })).status).toBe("NOT_SELECTED");
+    // Validation finishes even when nothing is left to replace a failure with.
+    const validated = await runStage("VALIDATE", ctx);
+    expect(validated.status).toBe("SUCCEEDED");
+  });
 });
+
+async function setMinimum(n: number) {
+  await db().siteSettings.update({ where: { id: "default" }, data: { minArticlesPerDesk: n } });
+}

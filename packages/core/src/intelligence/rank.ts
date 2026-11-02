@@ -104,24 +104,30 @@ function describe(score: ScoreBreakdown, weights: ScoringWeights): string {
   );
 }
 
+/** Lowest score a story may have when it is used only to reach the daily minimum. */
+export const MINIMUM_FILL_FLOOR = 0.35;
+
 /**
- * Ranks clusters and selects up to `quota` with a total at or above `minScore`.
- * One selection per cluster — a quota is never filled by repeating an event.
+ * Ranks clusters and selects up to `quota` with a total at or above `minScore`. When fewer than
+ * `minimum` pass, the next-best stories (older reserve stories included) fill the gap down to
+ * `floorScore`. One selection per cluster — a quota is never filled by repeating an event.
  */
 export function rankClusters(
   clusters: RankCluster[],
-  options: { weights: ScoringWeights; reference: Date; quota: number; minScore: number; desk: string },
+  options: { weights: ScoringWeights; reference: Date; quota: number; minScore: number; desk: string; minimum?: number; floorScore?: number },
 ): RankedCluster[] {
   const scored = clusters
     .filter((c) => c.members.length > 0)
     .map((c) => ({ ...c, score: scoreCluster(c, options.weights, options.reference), primaryCandidateId: pickPrimary(c.members).candidateId }))
     .sort((a, b) => b.score.total - a.score.total || a.clusterId.localeCompare(b.clusterId));
 
+  const minimum = Math.min(options.minimum ?? 0, options.quota);
+  const floor = options.floorScore ?? MINIMUM_FILL_FLOOR;
   let position = 0;
-  return scored.map((c) => {
+  const first = scored.map((c) => {
     const base = describe(c.score, options.weights);
     if (c.score.freshness === 0) {
-      return { ...c, selected: false, position: null, explanation: `${base} Not selected: outside the 30-hour freshness window or publication time unverified.` };
+      return { ...c, selected: false, position: null, explanation: `${base} Not selected: older than the 30-hour freshness window (kept only as a reserve for the daily minimum).` };
     }
     if (c.score.total < options.minScore) {
       return { ...c, selected: false, position: null, explanation: `${base} Not selected: below the minimum score of ${options.minScore}.` };
@@ -131,5 +137,11 @@ export function rankClusters(
     }
     position += 1;
     return { ...c, selected: true, position, explanation: `${base} Selected #${position} of up to ${options.quota} for the ${options.desk} desk.` };
+  });
+  // Too few stories cleared the usual bar: take the next best, highest score first.
+  return first.map((c) => {
+    if (c.selected || position >= minimum || c.score.total < floor) return c;
+    position += 1;
+    return { ...c, selected: true, position, explanation: `${describe(c.score, options.weights)} Selected #${position} to reach the ${options.desk} desk's daily minimum of ${minimum}, below the usual bar.` };
   });
 }

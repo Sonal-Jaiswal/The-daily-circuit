@@ -109,6 +109,25 @@ describe("ranking", () => {
     expect(ranked.find((r) => r.clusterId === "old")!.explanation).toMatch(/freshness window/);
   });
 
+  it("fills up to the daily minimum with the next-best real stories, never below the floor", () => {
+    const clusters: RankCluster[] = [
+      { clusterId: "strong", title: "Strong", members: [member({ candidateId: "s" })] },
+      { clusterId: "middling", title: "Middling", members: [member({ candidateId: "m", importance: 4, impact: 3, interest: 4 })] },
+      { clusterId: "reserve", title: "Two days old", members: [member({ candidateId: "r", publishedAt: new Date(ref.getTime() - 48 * 3_600_000) })] },
+      { clusterId: "weak", title: "Weak", members: [member({ candidateId: "w", importance: 0, impact: 0, interest: 0, reliability: 0.3 })] },
+    ];
+    const ranked = rankClusters(clusters, { weights: DEFAULT_WEIGHTS, reference: ref, quota: 10, minScore: 0.55, minimum: 5, desk: "AI" });
+    const byId = new Map(ranked.map((r) => [r.clusterId, r]));
+    expect(byId.get("strong")!.position).toBe(1);
+    expect(byId.get("middling")!.selected).toBe(true);
+    expect(byId.get("reserve")!.selected).toBe(true);
+    expect(byId.get("reserve")!.explanation).toMatch(/daily minimum of 5/);
+    expect(byId.get("weak")!.selected).toBe(false); // 0.075, under the 0.35 floor
+    expect(ranked.filter((r) => r.selected)).toHaveLength(3);
+    // The minimum never exceeds the quota.
+    expect(rankClusters(clusters, { weights: DEFAULT_WEIGHTS, reference: ref, quota: 1, minScore: 0.55, minimum: 5, desk: "AI" }).filter((r) => r.selected)).toHaveLength(1);
+  });
+
   it("publishes fewer than the quota when fewer stories qualify", () => {
     const ranked = rankClusters([{ clusterId: "only", title: "Only", members: [member()] }], { weights: DEFAULT_WEIGHTS, reference: ref, quota: 10, minScore: 0.55, desk: "Markets" });
     expect(ranked.filter((r) => r.selected)).toHaveLength(1);

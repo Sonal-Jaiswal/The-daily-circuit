@@ -133,7 +133,7 @@ describe("text and settings", () => {
   });
 
   it("keeps ads off without a valid publisher ID", () => {
-    const base = { id: "default", siteName: "S", tagline: "t", publishTimeIst: "21:00", maxAiArticles: 10, maxMarketArticles: 10, minSelectionScore: 0.55, scoringWeights: {}, autoPublish: true, latePublishGraceMin: 180, monthlyBudgetUsd: 100, enableFactCheckPass: true, marketWatchlist: [], significantMovePct: 4, adSlots: null, newsletterDigestEnabled: false, writerGuidance: "", aiCoverageFocus: "", marketsCoverageFocus: "", imageStyle: "illustration", updatedById: null, updatedAt: new Date() };
+    const base = { id: "default", siteName: "S", tagline: "t", publishTimeIst: "21:00", maxAiArticles: 10, maxMarketArticles: 10, minArticlesPerDesk: 5, minSelectionScore: 0.55, scoringWeights: {}, autoPublish: true, latePublishGraceMin: 180, monthlyBudgetUsd: 100, enableFactCheckPass: true, marketWatchlist: [], significantMovePct: 4, adSlots: null, newsletterDigestEnabled: false, writerGuidance: "", aiCoverageFocus: "", marketsCoverageFocus: "", imageStyle: "illustration", updatedById: null, updatedAt: new Date() };
     expect(resolveSettings({ ...base, adsEnabled: true, adsensePublisherId: null }).ads.enabled).toBe(false);
     expect(resolveSettings({ ...base, adsEnabled: true, adsensePublisherId: "ca-pub-123" }).ads.enabled).toBe(false);
     expect(resolveSettings({ ...base, adsEnabled: true, adsensePublisherId: "pub-1234567890123456" }).ads.enabled).toBe(true);

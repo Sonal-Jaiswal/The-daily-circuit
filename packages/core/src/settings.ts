@@ -46,6 +46,7 @@ export interface ResolvedSettings {
   publishTimeIst: string;
   maxAiArticles: number;
   maxMarketArticles: number;
+  minArticlesPerDesk: number;
   minSelectionScore: number;
   weights: ScoringWeights;
   autoPublish: boolean;
@@ -73,6 +74,7 @@ export function resolveSettings(raw: SiteSettings): ResolvedSettings {
     publishTimeIst: raw.publishTimeIst,
     maxAiArticles: raw.maxAiArticles,
     maxMarketArticles: raw.maxMarketArticles,
+    minArticlesPerDesk: raw.minArticlesPerDesk,
     minSelectionScore: raw.minSelectionScore,
     weights: weights.success ? weights.data : DEFAULT_WEIGHTS,
     autoPublish: raw.autoPublish,

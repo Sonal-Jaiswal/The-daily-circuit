@@ -41,7 +41,7 @@ async function rankDesk(ctx: PipelineContext, desk: Desk) {
       }),
     }));
   const reference = istWallTimeToUtc(ctx.editionDate, ctx.settings.publishTimeIst);
-  const ranked = rankClusters(input, { weights: ctx.settings.weights, reference, quota: remaining, minScore: ctx.settings.minSelectionScore, desk: desk === "AI" ? "AI" : "Markets" });
+  const ranked = rankClusters(input, { weights: ctx.settings.weights, reference, quota: remaining, minimum: Math.max(0, ctx.settings.minArticlesPerDesk - alreadyWritten), minScore: ctx.settings.minSelectionScore, desk: desk === "AI" ? "AI" : "Markets" });
 
   for (const c of ranked) {
     for (const m of c.members) {

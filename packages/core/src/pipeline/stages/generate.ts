@@ -1,11 +1,12 @@
-import { Prisma, type NewsCandidate, type NewsSource, type Section, type StockSnapshot, type StoryCluster } from "@tdc/db";
+import { Prisma, type ArticleStatus, type Desk, type NewsCandidate, type NewsSource, type Section, type StockSnapshot, type StoryCluster } from "@tdc/db";
 import { LlmError } from "../../ai/gateway";
 import { WRITER_SYSTEM, writerPrompt, type PromptSource, type StockContext } from "../../editorial/prompts";
 import { researchCandidate } from "../../editorial/research";
 import { ArticleDraftSchema, clampDraft, PROMPT_VERSION, type ArticleDraft } from "../../editorial/schema";
 import type { GenerationMeta } from "../../publishing/articles";
 import { uniqueSlug } from "../../publishing/slug";
-import { istWallTimeToUtc, toDbDate } from "../../time/ist";
+import { addMinutes, istWallTimeToUtc, toDbDate } from "../../time/ist";
+import { MINIMUM_FILL_FLOOR } from "../../intelligence/rank";
 import { sha256 } from "../../util/crypto";
 import { readingTimeMinutes, slugify, truncate, uniqueBy, wordCount } from "../../util/text";
 import { markdownToPlainText } from "../../content/markdown";
@@ -193,20 +194,19 @@ async function saveDraft(
   return article;
 }
 
-export async function generateStage(ctx: PipelineContext): Promise<StageResult> {
+const CLUSTER_INCLUDE = { candidates: { where: { status: { in: ["SELECTED", "CLASSIFIED"] as Array<"SELECTED" | "CLASSIFIED"> } }, include: { source: true } } } as const;
+
+export interface WriteResult {
+  written: number;
+  failed: number;
+  problems: string[];
+}
+
+/** Researches and writes one draft per cluster. A failure is recorded on the cluster and never stops the others. */
+async function writeClusters(ctx: PipelineContext, clusters: ClusterWithMembers[]): Promise<WriteResult> {
   const llm = requireLlm(ctx);
-  const edition = toDbDate(ctx.editionDate);
   const publishAt = istWallTimeToUtc(ctx.editionDate, ctx.settings.publishTimeIst);
   const editionRow = await ensureEdition(ctx.prisma, ctx.editionDate, publishAt);
-
-  const clusters = await ctx.prisma.storyCluster.findMany({
-    where: {
-      editionDate: edition,
-      candidates: { some: { status: "SELECTED", isClusterPrimary: true } },
-      OR: [{ article: null }, { article: { status: "FAILED" } }],
-    },
-    include: { candidates: { where: { status: { in: ["SELECTED", "CLASSIFIED"] } }, include: { source: true } } },
-  });
 
   const problems: string[] = [];
   let written = 0;
@@ -278,9 +278,83 @@ export async function generateStage(ctx: PipelineContext): Promise<StageResult> 
       await recordFailure(ctx, cluster, editionRow.id, reason);
     }
   }
+  return { written, failed, problems };
+}
+
+const DESK_SECTIONS: Record<Desk, Section[]> = { AI: ["AI", "TECHNOLOGY"], MARKETS: ["MARKETS", "IPO"] };
+
+/** Articles of this edition and desk that are still on course for publication. */
+export async function deskArticleCount(ctx: PipelineContext, desk: Desk, statuses: ArticleStatus[]): Promise<number> {
+  const edition = await ctx.prisma.dailyEdition.findUnique({ where: { editionDate: toDbDate(ctx.editionDate) }, select: { id: true } });
+  if (!edition) return 0;
+  return ctx.prisma.article.count({ where: { editionId: edition.id, section: { in: DESK_SECTIONS[desk] }, status: { in: statuses } } });
+}
+
+/**
+ * Selects the next-best unwritten stories of a desk (highest ranking score first, never below the
+ * minimum-fill floor) to replace drafts that failed. Returns the clusters, ready to write.
+ */
+async function promoteReplacements(ctx: PipelineContext, desk: Desk, count: number): Promise<ClusterWithMembers[]> {
+  if (count <= 0) return [];
+  const leads = await ctx.prisma.newsCandidate.findMany({
+    where: { editionDate: toDbDate(ctx.editionDate), desk, status: "NOT_SELECTED", isClusterPrimary: true, totalScore: { gte: MINIMUM_FILL_FLOOR }, cluster: { article: null } },
+    orderBy: { totalScore: "desc" },
+    take: count,
+  });
+  for (const lead of leads) {
+    await ctx.prisma.newsCandidate.update({
+      where: { id: lead.id },
+      data: { status: "SELECTED", rankingExplanation: `${lead.rankingExplanation ?? ""} Selected as a replacement to reach the daily minimum of ${ctx.settings.minArticlesPerDesk}.`.trim() },
+    });
+  }
+  if (!leads.length) return [];
+  return ctx.prisma.storyCluster.findMany({ where: { id: { in: leads.map((l) => l.clusterId!) } }, include: CLUSTER_INCLUDE });
+}
+
+/**
+ * Keeps writing replacement stories until each desk has `target(desk)` drafts on course, the
+ * desk runs out of real news, or the deadline passes.
+ */
+export async function topUpDesks(ctx: PipelineContext, options: { deadline: Date; count: (desk: Desk) => Promise<number> }): Promise<WriteResult & { promoted: number }> {
+  const total: WriteResult & { promoted: number } = { written: 0, failed: 0, problems: [], promoted: 0 };
+  for (const desk of ["AI", "MARKETS"] as const) {
+    const quota = desk === "AI" ? ctx.settings.maxAiArticles : ctx.settings.maxMarketArticles;
+    const target = Math.min(ctx.settings.minArticlesPerDesk, quota);
+    while (ctx.now() < options.deadline) {
+      const short = target - (await options.count(desk));
+      const clusters = await promoteReplacements(ctx, desk, short);
+      if (!clusters.length) break;
+      total.promoted += clusters.length;
+      ctx.log.info("Writing replacement stories to reach the daily minimum", { desk, short, clusters: clusters.length });
+      const r = await writeClusters(ctx, clusters);
+      total.written += r.written;
+      total.failed += r.failed;
+      total.problems.push(...r.problems);
+    }
+  }
+  return total;
+}
+
+export async function generateStage(ctx: PipelineContext): Promise<StageResult> {
+  requireLlm(ctx);
+  const publishAt = istWallTimeToUtc(ctx.editionDate, ctx.settings.publishTimeIst);
+  const clusters = await ctx.prisma.storyCluster.findMany({
+    where: {
+      editionDate: toDbDate(ctx.editionDate),
+      candidates: { some: { status: "SELECTED", isClusterPrimary: true } },
+      OR: [{ article: null }, { article: { status: "FAILED" } }],
+    },
+    include: CLUSTER_INCLUDE,
+  });
+  const main = await writeClusters(ctx, clusters);
+  // Leave validation its slot: stop starting replacements 12 minutes before publication.
+  const topUp = await topUpDesks(ctx, { deadline: addMinutes(publishAt, -12), count: (desk) => deskArticleCount(ctx, desk, ["DRAFT", "NEEDS_REVIEW", "APPROVED", "PUBLISHED"]) });
+  const written = main.written + topUp.written;
+  const failed = main.failed + topUp.failed;
+  const problems = [...main.problems, ...topUp.problems];
   return {
-    status: failed || problems.length ? (written ? "PARTIAL" : clusters.length ? "PARTIAL" : "SUCCEEDED") : "SUCCEEDED",
-    summary: { clusters: clusters.length, written, failed },
+    status: failed || problems.length ? "PARTIAL" : "SUCCEEDED",
+    summary: { clusters: clusters.length, written, failed, replacements: topUp.promoted },
     problems,
   };
 }

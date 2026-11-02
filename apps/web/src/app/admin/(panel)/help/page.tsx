@@ -46,12 +46,16 @@ export default async function HelpPage() {
             <li><strong>8:00 pm, Collect</strong>: reads every enabled news source.</li>
             <li><strong>8:15 pm, Process</strong>: drops old and duplicate stories, asks the AI to classify the rest, and groups reports of the same event.</li>
             <li><strong>8:25 pm, Rank</strong>: scores stories (importance, source credibility, freshness, impact, interest) and picks up to your daily limit per desk.</li>
-            <li><strong>8:30 pm, Write</strong>: the AI writes each article from its sources, and an illustration is generated.</li>
+            <li><strong>8:30 pm, Write</strong>: the AI writes each article from its sources, and an illustration is generated. If a draft fails, the next-best story is written instead.</li>
             <li><strong>8:50 pm, Validate</strong>: automated checks on citations, quotes, figures and investment-advice wording. Clean articles are approved; doubtful ones wait for you.</li>
             <li><strong>9:00 pm, Publish</strong>: approved articles go live.</li>
             <li><strong>9:05 pm</strong>: the site refreshes and the daily report is emailed.</li>
           </ol>
-          <p>If fewer stories qualify, fewer are published. Nothing is invented to fill the quota.</p>
+          <p>
+            Each desk aims for at least the daily minimum (Settings, 5 by default). When too few stories clear the usual bar, it also uses
+            weaker stories, stories up to three days old, and unused stories from recent editions, and replaces drafts that fail. If there
+            is still not enough real news, fewer are published: nothing is invented, and podcasts, guides, opinion and routine notices are never used.
+          </p>
         </Section>
 
         <Section id="review" title="Reviewing articles">
