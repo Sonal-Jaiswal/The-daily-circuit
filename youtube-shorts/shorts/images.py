@@ -23,10 +23,13 @@ def photo_prompt(subject: str) -> str:
     scene = re.sub(r"\brobot(ic|s|ics)?\b", "automated machinery", scene, flags=re.I)
     scene = re.sub(r"\bAI agents?\b", "software system", scene, flags=re.I)
     scene = re.sub(r"\b(person|people|man|woman|men|women|CEO|executive|founder|judge|official)s?\b", "office", scene, flags=re.I)
+    # Unlike the site's single wide image, these fill the frame behind news narration, and the model renders
+    # such subjects as garbled writing and invented charts that could pass for real data.
+    scene = re.sub(r"\b(charts?|graphs?|diagrams?|dashboards?|screens?|monitors?|displays?|interfaces?|apps?|APIs?|laptops?|phones?|documents?|signs?|software|data)\b", "hardware", scene, flags=re.I)
     return " ".join(
         [
             f"Editorial stock photograph evoking this theme: {scene[:300]}.",
-            "Show objects, places, technology, documents, architecture or abstract scenes only, as a symbolic visual rather than a depiction of a specific real event.",
+            "Show physical objects, materials, machinery, architecture or landscapes only, as a symbolic visual rather than a depiction of a specific real event.",
             "Realistic professional photography, natural light, shallow depth of field, clean composition centred in the frame, muted colour grading with deep indigo and warm amber tones.",
             "Strictly no people, faces, hands, silhouettes or crowds; no robots, humanoids, mannequins, statues or anything with a face; no text, letters, numbers, logos, brand marks, signs, displays with writing, flags or watermarks.",
             "Prefer close-up details of hardware, materials, buildings, landscapes or laboratory equipment.",

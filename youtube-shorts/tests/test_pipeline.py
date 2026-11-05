@@ -109,6 +109,14 @@ class ScriptChecks(unittest.TestCase):
         with mock.patch.object(script, "_providers", return_value=[("fake", lambda _p: good)]):
             self.assertEqual(script.write_script(article()).author, "fake")
 
+    def test_llm_text_is_normalised_for_the_caption_font(self):
+        import json
+
+        scenes = [{"narration": s.narration, "image_subject": s.image_subject} for s in valid_scenes()]
+        scenes[1]["narration"] += " Frame\u2011by\u2011frame."
+        with mock.patch.object(script, "_providers", return_value=[("fake", lambda _p: json.dumps({"scenes": scenes}))]):
+            self.assertIn("Frame-by-frame", script.write_script(article()).scenes[1].narration)
+
     def test_only_free_openrouter_models_are_called(self):
         with mock.patch.dict(os.environ, {"OPENROUTER_API_KEY": "k", "OPENROUTER_MODELS": "a/paid,b/free:free"}, clear=True):
             self.assertEqual([n for n, _ in script._providers()], ["openrouter/b/free:free"])
@@ -118,6 +126,11 @@ class Images(unittest.TestCase):
     def test_prompt_rephrases_words_that_summon_figures(self):
         prompt = images.photo_prompt("a CEO beside a humanoid robot").split(". ")[0]
         for word in ("CEO", "humanoid", "robot "):
+            self.assertNotIn(word, prompt)
+
+    def test_prompt_rephrases_subjects_that_come_out_as_fake_writing_or_data(self):
+        prompt = images.photo_prompt("a chart on a laptop screen showing API data").split(". ")[0]
+        for word in ("chart", "laptop", "screen", "API", "data"):
             self.assertNotIn(word, prompt)
 
     def test_generation_failure_uses_the_article_image(self):

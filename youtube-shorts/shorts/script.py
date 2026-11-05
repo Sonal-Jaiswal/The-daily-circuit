@@ -9,7 +9,7 @@ from dataclasses import dataclass
 import requests
 
 from .config import env
-from .source import Article
+from .source import Article, clean_text
 
 MIN_WORDS, MAX_WORDS = 50, 125
 ADVICE = re.compile(r"\b(should|must|better) (buy|sell|invest|hold)\b|\b(buy now|sell now|invest now|sure[- ]shot|multibagger|guaranteed returns?|target price)\b", re.I)
@@ -77,8 +77,9 @@ Rules for the narration:
 - Do not mention this channel or a website, and do not add a closing line.
 
 Rules for image_subject, one per scene:
-- A short description of a real-looking scene of objects, places, hardware, documents or buildings that suits the scene.
-- No people, faces, robots, text, logos, or brand or company names.
+- A short description of a real-looking scene of physical objects, materials, machinery or buildings that suits the scene.
+- No people, faces, robots, logos, or brand or company names.
+- Nothing that would contain writing or data: no screens, laptops, phones, apps, charts, graphs, diagrams, documents, signs or software terms.
 
 Reply with only this JSON:
 {{"scenes": [{{"narration": "...", "image_subject": "..."}}]}}
@@ -153,7 +154,7 @@ def write_script(article: Article) -> Script:
     for name, call in _providers():
         try:
             data = _parse_json(call(prompt))
-            scenes = [Scene(str(s["narration"]).strip(), str(s.get("image_subject") or article.title).strip()) for s in data["scenes"]]
+            scenes = [Scene(clean_text(str(s["narration"])), clean_text(str(s.get("image_subject") or article.title))) for s in data["scenes"]]
         except (requests.RequestException, KeyError, IndexError, TypeError, ValueError) as error:
             # str(error) from requests can include the URL but never the key: keys travel in headers.
             print(f"  {name} failed: {type(error).__name__}: {error}")
