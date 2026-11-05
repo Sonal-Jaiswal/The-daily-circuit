@@ -105,6 +105,12 @@ def choose_item(items: list[FeedItem], done_urls: list[str], max_age_hours: int,
     return next((i for i in fresh if i.desk != last_desk), fresh[0])
 
 
+def ticker_headlines(items: list[FeedItem], current: Article, limit: int = 6) -> list[str]:
+    """Other real stories for the moving strip at the bottom."""
+    others = [i.title for i in items if _norm(i.url) != _norm(current.url) and not ROUTINE.search(i.title) and not ACCUSATION.search(i.title)]
+    return others[:limit]
+
+
 def _norm(url: str) -> str:
     return url.rstrip("/").lower()
 

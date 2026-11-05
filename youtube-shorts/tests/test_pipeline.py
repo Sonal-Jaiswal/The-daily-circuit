@@ -33,7 +33,7 @@ def article(**overrides):
 
 
 def valid_scenes(text="OpenAI added GIF creation to ChatGPT."):
-    filler = " ".join(["users can edit the frames"] * 12)
+    filler = " ".join(["users can edit the frames"] * 8)
     return [Scene(text, "a"), Scene(filler + ".", "b"), Scene("Users generate more than 4 billion images per week.", "c")]
 
 
@@ -103,6 +103,23 @@ class ScriptChecks(unittest.TestCase):
         scenes = valid_scenes("Investors should buy OpenAI now.")
         self.assertTrue(any("advice" in p for p in script.problems(scenes, article())))
 
+    def test_rejects_too_many_figures(self):
+        rich = article(key_facts=["1 and 2 and 3 are all in the article."])
+        scenes = valid_scenes("OpenAI added 1 and 2 and 3 to ChatGPT.")
+        self.assertTrue(any("figures" in p for p in script.problems(scenes, rich)))
+
+    def test_rejects_invented_figures_on_screen(self):
+        self.assertTrue(any("on-screen figure" in p for p in script.problems(valid_scenes(), article(), "Now used by 900 people")))
+
+    def test_rejects_invented_names_on_screen(self):
+        self.assertTrue(any("on-screen name" in p for p in script.problems(valid_scenes(), article(), "this beats what Anthropic made")))
+
+    def test_title_case_banner_is_not_mistaken_for_names(self):
+        self.assertEqual(script.problems(valid_scenes(), article(), "Your Chats Just Got Weirder"), [])
+
+    def test_rejects_long_on_screen_text(self):
+        self.assertTrue(any("too long" in p for p in script.problems(valid_scenes(), article(), "one two three four five six seven eight nine")))
+
     def test_rejects_wrong_length(self):
         self.assertTrue(script.problems([Scene("Too short.", "a")] * 3, article()))
 
@@ -164,6 +181,31 @@ class Images(unittest.TestCase):
 
 
 class Voice(unittest.TestCase):
+    def test_align_uses_the_written_words_on_the_heard_clock(self):
+        heard = [voice.Word("chat", 0.0, 0.5), voice.Word("GPT", 0.5, 1.0), voice.Word("makes", 1.0, 1.5), voice.Word("gifts", 1.5, 2.0), voice.Word("now", 2.0, 2.5)]
+        words = voice.align(["ChatGPT", "makes", "GIFs", "now."], heard, 3.0)
+        self.assertEqual([w.text for w in words], ["ChatGPT", "makes", "GIFs", "now."])
+        self.assertEqual(words[1].start, 1.0)
+        self.assertEqual(words[3].start, 2.0)
+        self.assertTrue(words[1].start < words[2].start < words[3].start)
+
+    def test_align_spreads_evenly_with_no_transcript(self):
+        words = voice.align(["a", "b", "c"], [], 3.0)
+        self.assertEqual([w.start for w in words], [0.75, 1.5, 2.25])
+
+    def test_scenes_split_on_the_script_lines_and_cover_the_whole_audio(self):
+        lines = ["One two.", "Three SEBI."]
+        words = voice.align("One two. Three Sebi.".split(), [], 4.0)
+        scenes = voice.scenes_from_words(lines, words, 4.0)
+        self.assertEqual(scenes[0].start, 0.0)
+        self.assertEqual(scenes[-1].end, 4.0)
+        self.assertEqual(scenes[0].end, scenes[1].start)
+        self.assertEqual([w.text for w in scenes[1].words], ["Three", "SEBI"])
+
+    def test_falls_back_to_edge_tts_when_gemini_fails(self):
+        with mock.patch.dict(os.environ, {"GEMINI_API_KEY": "k"}), mock.patch.object(voice, "narrate_gemini", side_effect=RuntimeError("down")), mock.patch.object(voice, "narrate_edge", return_value=("a", ["s"])):
+            self.assertEqual(voice.narrate(["x"], Path("."))[2], "edge-tts")
+
     def test_sebi_is_respoken_and_restored_in_captions(self):
         self.assertEqual(voice._speakable("SEBI's rule"), "Sebi's rule")
         self.assertEqual(voice.displayable("Sebi’s"), "SEBI’s")
@@ -171,6 +213,9 @@ class Voice(unittest.TestCase):
 
 
 class Metadata(unittest.TestCase):
+    def test_catchy_headline_becomes_the_title(self):
+        self.assertTrue(youtube.build_metadata(article(), "public", "Your chats just got weirder")["snippet"]["title"].startswith("Your chats"))
+
     def test_title_fits_and_keeps_the_shorts_tag(self):
         snippet = youtube.build_metadata(article(title="A <very> long headline " * 10), "public")["snippet"]
         self.assertLessEqual(len(snippet["title"]), 100)

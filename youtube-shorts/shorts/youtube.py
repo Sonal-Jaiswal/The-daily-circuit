@@ -65,8 +65,8 @@ def uploaded_article_urls(token: str) -> list[str]:
     return urls
 
 
-def build_metadata(article: Article, privacy: str) -> dict:
-    title = re.sub(r"[<>]", "", article.title)
+def build_metadata(article: Article, privacy: str, headline: str = "") -> dict:
+    title = re.sub(r"[<>]", "", headline or article.title)
     suffix = " #Shorts"
     if len(title) + len(suffix) > 100:
         title = title[: 100 - len(suffix) - 1].rsplit(" ", 1)[0].rstrip(" ,.;:-") + "…"
