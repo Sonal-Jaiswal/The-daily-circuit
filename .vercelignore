@@ -8,3 +8,4 @@ playwright-report
 .env.*
 !.env.example
 packages/db/src/generated
+youtube-shorts

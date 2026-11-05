@@ -1,0 +1,76 @@
+name: YouTube Shorts
+
+# Turns the newest story without a Short into one and uploads it. Free: public repositories have
+# unlimited Actions minutes, and everything else used here is a free tier or needs no key.
+# 09:00 and 18:00 IST, one Short each, so last night's edition goes out across the next day.
+# Until the YOUTUBE_* secrets exist, runs only render; the video is attached to the run as an artifact.
+on:
+  schedule:
+    - cron: "30 3 * * *"
+    - cron: "30 12 * * *"
+  workflow_dispatch:
+    inputs:
+      privacy:
+        description: "Visibility of the uploaded Short"
+        type: choice
+        options: [private, unlisted, public]
+        default: private
+      url:
+        description: "Article URL (optional; blank picks the newest story without a Short)"
+        type: string
+      dry_run:
+        description: "Render only, do not upload"
+        type: boolean
+        default: false
+
+concurrency:
+  group: youtube-shorts
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  short:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: youtube-shorts
+    env:
+      YOUTUBE_CLIENT_ID: ${{ secrets.YOUTUBE_CLIENT_ID }}
+      YOUTUBE_CLIENT_SECRET: ${{ secrets.YOUTUBE_CLIENT_SECRET }}
+      YOUTUBE_REFRESH_TOKEN: ${{ secrets.YOUTUBE_REFRESH_TOKEN }}
+      GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+      GEMINI_MODEL: ${{ vars.GEMINI_MODEL || 'gemini-3.5-flash-lite' }}
+      GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+      GROQ_MODEL: ${{ vars.GROQ_MODEL }}
+      OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+      OPENROUTER_MODELS: ${{ vars.OPENROUTER_MODELS || 'nvidia/nemotron-3.5-super-vl:free,xingchen-agi/xing4.0-29b-a4b:free,dots-studio/dots-3-note-preview:free' }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      CLOUDFLARE_AI_TOKEN: ${{ secrets.CLOUDFLARE_AI_TOKEN }}
+      SITE_URL: ${{ vars.SITE_URL || 'https://aiblog.fun' }}
+      # Set the YOUTUBE_PRIVACY repository variable to `private` to pause public posting.
+      PRIVACY: ${{ inputs.privacy || vars.YOUTUBE_PRIVACY || 'public' }}
+      ARTICLE_URL: ${{ inputs.url }}
+      DRY_RUN: ${{ inputs.dry_run }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+      - run: pip install -r requirements.txt
+      - run: python -m unittest discover -s tests -t .
+      - name: Make and publish a Short
+        run: |
+          args=(--privacy "$PRIVACY")
+          [ -n "$ARTICLE_URL" ] && args+=(--url "$ARTICLE_URL")
+          if [ "$DRY_RUN" = "true" ] || [ -z "$YOUTUBE_REFRESH_TOKEN" ]; then args+=(--dry-run); fi
+          python run.py "${args[@]}"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: short
+          path: youtube-shorts/output/
+          retention-days: 7
+          if-no-files-found: ignore
