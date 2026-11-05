@@ -13,6 +13,7 @@ from .source import Article, clean_text
 
 MIN_WORDS, MAX_WORDS = 35, 80
 MAX_FIGURES = 2  # Viewers remember a story, not a list of numbers.
+MAX_SENTENCE_WORDS = 20  # Long sentences are what make narration sound read out.
 ADVICE = re.compile(r"\b(should|must|better) (buy|sell|invest|hold)\b|\b(buy now|sell now|invest now|sure[- ]shot|multibagger|guaranteed returns?|target price)\b", re.I)
 NUMBER = re.compile(r"\d[\d,]*(?:\.\d+)?")
 FILLER = re.compile(r"^(hey|hi|hello|welcome|what's up|did you know)\b", re.I)
@@ -48,6 +49,9 @@ def problems(scenes: list[Scene], article: Article, headline: str = "") -> list[
     found = []
     text = " ".join(s.narration for s in scenes)
     words = len(text.split())
+    longest = max((len(s.split()) for s in re.split(r"(?<=[.!?])\s+", text)), default=0)
+    if longest > MAX_SENTENCE_WORDS:
+        found.append(f"a sentence of {longest} words; the limit is {MAX_SENTENCE_WORDS}")
     if len(NUMBER.findall(text)) > MAX_FIGURES:
         found.append("too many figures to listen to")
     screen_text = [headline, *(s.banner for s in scenes)]
@@ -97,18 +101,20 @@ How it should sound:
 - Everyday spoken English with contractions and short sentences. Something you would say to a friend.
 - Pick only the one idea that matters and leave the rest out. Never list features, names of plans, or specifications.
 - Avoid numbers. Use one only if the number itself is the story, written in digits exactly as in the source.
-- Explain or drop jargon, and leave out product version numbers.
+- Every sentence under 16 words where you can, and never over 20.
+- A school student must understand every word. If a term needs explaining, say what it means for people in everyday words instead, or leave it out. Regulatory and financial terms always count as jargon.
+- Leave out product version numbers.
 - Never say "according to", "the article", "in a statement", "breaking" or "live".
 
 Stay honest:
-- Use only facts in the source. Why it matters may only restate what the source supports. No predictions, opinions or hype beyond it.
+- Use only facts in the source. Why it matters may only restate what the source supports. Do not add benefits, effects, predictions, opinions or hype beyond it. An independent checker rejects any claim the source does not support.
 - Never recommend buying, selling or holding anything.
 - Do not mention this channel or a website.
 
 Also write:
 - headline: at most 7 words, catchy and true, in sentence case, for the top of the video and the title.
 - banner, one per scene: at most 6 words, in sentence case, the point of that scene like a TV news banner. Not a copy of the narration.
-- image_subject, one per scene: a short description of a real-looking scene of physical objects, materials, machinery or buildings that suits the scene. No people, faces, robots, logos, or brand or company names. Nothing that would contain writing or data: no screens, laptops, phones, apps, charts, graphs, diagrams, documents, signs or software terms.
+- image_subject, one per scene: a short description of a real-looking scene of physical objects, materials, machinery or buildings that suits the scene. No people, faces, robots, logos, or brand or company names. Nothing that would contain writing or data: no screens, laptops, phones, apps, charts, graphs, diagrams, documents, signs or software terms. No banknotes or coins.
 
 Reply with only this JSON:
 {{"headline": "...", "scenes": [{{"narration": "...", "banner": "...", "image_subject": "..."}}]}}
@@ -177,20 +183,84 @@ def _from_key_facts(article: Article) -> list[Scene]:
     return scenes
 
 
+def _fact_check_prompt(scenes: list[Scene], headline: str, article: Article) -> str:
+    source = {"summary": article.summary, "key_facts": article.key_facts, "article": article.paragraphs}
+    script = {"headline": headline, "banners": [s.banner for s in scenes], "narration": [s.narration for s in scenes]}
+    return f"""Fact-check a short news video script against its source. Nothing else may be assumed.
+
+List every claim in the script that the source does not state or clearly imply. Include added benefits, effects on people, causes, predictions, and anything stated more strongly than the source does. Catchy wording is fine if the fact underneath is in the source.
+
+Reply with only this JSON:
+{{"unsupported": ["the claim, and why", "..."]}}
+Use an empty list if everything is supported.
+
+Source:
+{json.dumps(source, ensure_ascii=False)}
+
+Script:
+{json.dumps(script, ensure_ascii=False)}"""
+
+
+def _fact_check(scenes: list[Scene], headline: str, article: Article, writer: str, providers: list) -> list[str] | None:
+    """Claims a second model could not find in the source, or None if nobody could check.
+
+    A different model checks where possible, since a model is poor at catching its own additions."""
+    prompt = _fact_check_prompt(scenes, headline, article)
+    for name, call in sorted(providers, key=lambda p: p[0] == writer):
+        try:
+            found = _parse_json(call(prompt))["unsupported"]
+            print(f"  fact-checked by {name}: {len(found)} unsupported")
+            return [str(claim) for claim in found]
+        except (requests.RequestException, KeyError, IndexError, TypeError, ValueError) as error:
+            print(f"  {name} could not fact-check: {type(error).__name__}")
+    return None
+
+
 def write_script(article: Article) -> Script:
     prompt = _prompt(article)
-    for name, call in _providers():
-        try:
-            data = _parse_json(call(prompt))
-            scenes = [Scene(clean_text(str(s["narration"])), clean_text(str(s.get("image_subject") or article.title)), clean_text(str(s.get("banner") or ""))) for s in data["scenes"]]
-            headline = clean_text(str(data.get("headline") or article.title))
-        except (requests.RequestException, KeyError, IndexError, TypeError, ValueError) as error:
-            # str(error) from requests can include the URL but never the key: keys travel in headers.
-            print(f"  {name} failed: {type(error).__name__}: {error}")
-            continue
-        issues = problems(scenes, article, headline)
-        if not issues:
-            return Script(scenes, name, headline)
-        print(f"  {name} draft rejected: {'; '.join(issues)}")
+    providers = _providers()
+    for name, call in providers:
+        feedback = ""
+        for _attempt in range(2):
+            try:
+                data = _parse_json(call(prompt + feedback))
+                scenes = [Scene(clean_text(str(s["narration"])), clean_text(str(s.get("image_subject") or article.title)), clean_text(str(s.get("banner") or ""))) for s in data["scenes"]]
+                headline = clean_text(str(data.get("headline") or article.title))
+            except (requests.RequestException, KeyError, IndexError, TypeError, ValueError) as error:
+                # str(error) from requests can include the URL but never the key: keys travel in headers.
+                print(f"  {name} failed: {type(error).__name__}: {error}")
+                break
+            issues = problems(scenes, article, headline)
+            if not issues:
+                # No editor sees this video, so a script that could not be checked is not used.
+                issues = _fact_check(scenes, headline, article, name, providers)
+                if issues is None:
+                    issues = ["no model available to fact-check it"]
+            if not issues:
+                return Script(scenes, name, headline)
+            print(f"  {name} draft rejected: {'; '.join(issues)[:400]}")
+            feedback = "\n\nYour previous draft was rejected for these reasons. Fix them:\n- " + "\n- ".join(issues)
     print("  using the article's key facts as the script")
     return Script(_from_key_facts(article), "key-facts", article.title)
+
+
+def most_watchable(candidates: list, limit: int = 10):
+    """Of these stories, the one an ordinary viewer would most want to hear about. Falls back to the first."""
+    if len(candidates) < 2:
+        return candidates[0] if candidates else None
+    shortlist = candidates[:limit]
+    titles = "\n".join(f"{i}. {item.title}" for i, item in enumerate(shortlist))
+    prompt = f"""Which of these news stories would ordinary people most want to hear about in a 25 second video? Prefer stories that affect their money, work or daily life, or that are genuinely surprising. Avoid routine regulatory process.
+
+{titles}
+
+Reply with only this JSON: {{"best": <number>}}"""
+    for name, call in _providers():
+        try:
+            best = int(_parse_json(call(prompt))["best"])
+            if 0 <= best < len(shortlist):
+                print(f"  {name} chose: {shortlist[best].title}")
+                return shortlist[best]
+        except (requests.RequestException, KeyError, IndexError, TypeError, ValueError) as error:
+            print(f"  {name} could not choose a story: {type(error).__name__}")
+    return shortlist[0]

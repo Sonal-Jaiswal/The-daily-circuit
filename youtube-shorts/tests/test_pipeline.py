@@ -33,8 +33,8 @@ def article(**overrides):
 
 
 def valid_scenes(text="OpenAI added GIF creation to ChatGPT."):
-    filler = " ".join(["users can edit the frames"] * 8)
-    return [Scene(text, "a"), Scene(filler + ".", "b"), Scene("Users generate more than 4 billion images per week.", "c")]
+    filler = " ".join(["users can edit the frames."] * 8)
+    return [Scene(text, "a"), Scene(filler, "b"), Scene("Users generate more than 4 billion images per week.", "c")]
 
 
 def item(url, desk_category="AI News", age_hours=1):
@@ -123,6 +123,82 @@ class ScriptChecks(unittest.TestCase):
     def test_rejects_wrong_length(self):
         self.assertTrue(script.problems([Scene("Too short.", "a")] * 3, article()))
 
+    def test_rejects_long_sentences(self):
+        scenes = valid_scenes("OpenAI " + "added " * 25 + "GIF creation.")
+        self.assertTrue(any("sentence" in p for p in script.problems(scenes, article())))
+
+    def test_good_draft_is_rejected_when_the_fact_checker_finds_an_invented_claim(self):
+        import json
+
+        draft = json.dumps({"headline": "Your chats just got weirder", "scenes": [{"narration": s.narration, "image_subject": "x", "banner": "b"} for s in valid_scenes()]})
+        checks = []
+
+        def writer(prompt):
+            return draft
+
+        def checker(prompt):
+            checks.append(prompt)
+            return '{"unsupported": ["keeps prices steadier: not in the source"]}'
+
+        def provider(prompt):
+            return checker(prompt) if prompt.startswith("Fact-check") else writer(prompt)
+
+        with mock.patch.object(script, "_providers", return_value=[("fake", provider)]):
+            result = script.write_script(article())
+        self.assertEqual(result.author, "key-facts")
+        self.assertEqual(len(checks), 2)  # One retry with feedback, then give up on this provider.
+
+    def test_rejection_reasons_are_sent_back_to_the_writer(self):
+        import json
+
+        prompts = []
+        good = json.dumps({"scenes": [{"narration": s.narration, "image_subject": "x", "banner": "b"} for s in valid_scenes()]})
+
+        def provider(prompt):
+            if prompt.startswith("Fact-check"):
+                return '{"unsupported": []}'
+            prompts.append(prompt)
+            return '{"scenes": [{"narration": "Too short.", "image_subject": "x"}]}' if len(prompts) == 1 else good
+
+        with mock.patch.object(script, "_providers", return_value=[("fake", provider)]):
+            self.assertEqual(script.write_script(article()).author, "fake")
+        self.assertIn("rejected", prompts[1])
+
+    def test_script_that_nobody_can_fact_check_is_not_used(self):
+        import json
+
+        good = json.dumps({"scenes": [{"narration": s.narration, "image_subject": "x", "banner": "b"} for s in valid_scenes()]})
+
+        def provider(prompt):
+            if prompt.startswith("Fact-check"):
+                raise script.requests.ConnectionError("down")
+            return good
+
+        with mock.patch.object(script, "_providers", return_value=[("fake", provider)]):
+            self.assertEqual(script.write_script(article()).author, "key-facts")
+
+    def test_a_different_model_checks_first(self):
+        used = []
+
+        def make(name):
+            def call(_prompt):
+                used.append(name)
+                return '{"unsupported": []}'
+            return (name, call)
+
+        script._fact_check(valid_scenes(), "h", article(), "a", [make("a"), make("b")])
+        self.assertEqual(used, ["b"])
+
+    def test_most_watchable_uses_the_model_choice_and_falls_back_to_newest(self):
+        items = [item("https://aiblog.fun/ai/a"), item("https://aiblog.fun/ai/b")]
+        with mock.patch.object(script, "_providers", return_value=[("fake", lambda _p: '{"best": 1}')]):
+            self.assertEqual(script.most_watchable(items).url, "https://aiblog.fun/ai/b")
+        with mock.patch.object(script, "_providers", return_value=[("fake", lambda _p: '{"best": 99}')]):
+            self.assertEqual(script.most_watchable(items).url, "https://aiblog.fun/ai/a")
+        with mock.patch.object(script, "_providers", return_value=[]):
+            self.assertEqual(script.most_watchable(items).url, "https://aiblog.fun/ai/a")
+        self.assertIsNone(script.most_watchable([]))
+
     def test_bad_llm_draft_falls_through_to_key_facts(self):
         bad = '{"scenes": [{"narration": "Made up 999 figure.", "image_subject": "x"}]}'
         with mock.patch.object(script, "_providers", return_value=[("fake", lambda _p: bad)]):
@@ -134,7 +210,8 @@ class ScriptChecks(unittest.TestCase):
         import json
 
         good = "```json\n" + json.dumps({"scenes": [{"narration": s.narration, "image_subject": s.image_subject} for s in valid_scenes()]}) + "\n```"
-        with mock.patch.object(script, "_providers", return_value=[("fake", lambda _p: good)]):
+        provider = lambda p: '{"unsupported": []}' if p.startswith("Fact-check") else good
+        with mock.patch.object(script, "_providers", return_value=[("fake", provider)]):
             self.assertEqual(script.write_script(article()).author, "fake")
 
     def test_llm_text_is_normalised_for_the_caption_font(self):
@@ -142,7 +219,8 @@ class ScriptChecks(unittest.TestCase):
 
         scenes = [{"narration": s.narration, "image_subject": s.image_subject} for s in valid_scenes()]
         scenes[1]["narration"] += " Frame\u2011by\u2011frame."
-        with mock.patch.object(script, "_providers", return_value=[("fake", lambda _p: json.dumps({"scenes": scenes}))]):
+        provider = lambda p: '{"unsupported": []}' if p.startswith("Fact-check") else json.dumps({"scenes": scenes})
+        with mock.patch.object(script, "_providers", return_value=[("fake", provider)]):
             self.assertIn("Frame-by-frame", script.write_script(article()).scenes[1].narration)
 
     def test_only_free_openrouter_models_are_called(self):

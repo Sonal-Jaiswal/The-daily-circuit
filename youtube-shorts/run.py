@@ -42,7 +42,7 @@ def main() -> int:
         desk = "markets" if "/markets/" in args.url or "/ipo/" in args.url else "ai"
         article = source.fetch_article(args.url, desk)
     else:
-        item = source.choose_item(feed, done, int(env("MAX_ARTICLE_AGE_HOURS", "72")))
+        item = script.most_watchable(source.candidates(feed, done, int(env("MAX_ARTICLE_AGE_HOURS", "72"))))
         if not item:
             print("Nothing new: every recent story already has a Short.")
             return 0
