@@ -22,6 +22,10 @@ on:
         description: "Render only, do not upload"
         type: boolean
         default: false
+      voice_samples:
+        description: "Only make voice samples (no video, no upload)"
+        type: boolean
+        default: false
 
 concurrency:
   group: youtube-shorts
@@ -68,7 +72,11 @@ jobs:
           python-version: "3.14"
       - run: pip install -r requirements.txt
       - run: python -m unittest discover -s tests -t .
+      - name: Make voice samples
+        if: ${{ inputs.voice_samples }}
+        run: python voice_samples.py
       - name: Make and publish a Short
+        if: ${{ !inputs.voice_samples }}
         run: |
           args=(--privacy "$PRIVACY")
           [ -n "$ARTICLE_URL" ] && args+=(--url "$ARTICLE_URL")
