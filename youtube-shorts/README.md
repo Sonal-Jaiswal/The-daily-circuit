@@ -4,7 +4,8 @@ Turns stories from [aiblog.fun](https://aiblog.fun) into vertical Shorts and upl
 
 ```
 aiblog.fun RSS + article page     picks the newest story without a Short, alternating AI and markets,
-                                  skipping routine data releases and notices (`ROUTINE` in shorts/source.py)
+                                  skipping routine notices and accusations against named parties
+                                  (`ROUTINE` and `ACCUSATION` in shorts/source.py)
         ↓
 Script    Gemini → Groq → OpenRouter free models. Every figure and name must appear in the article,
           otherwise the next provider tries. Last resort: the article's own key facts.
@@ -77,6 +78,6 @@ Your first upload may need YouTube's phone verification on the channel if the ac
 
 - **Altered-content label missing:** on the first test upload the API accepted `containsSyntheticMedia: true` but returned no value when read back. Check the video's Altered content setting in YouTube Studio; the on-screen and description disclosures do not depend on it.
 - **`invalid_grant`** in the log: the consent screen is still in Testing, or access was revoked. Fix step 1.3 and run `auth.py --github` again.
-- **Voice failures:** edge-tts relies on an unofficial Microsoft endpoint, which can change or block without notice. Run `pip install -U edge-tts` first; if it stays down, the voice is the one part to swap (in `shorts/voice.py`).
-- **Scheduled runs stop after 60 days:** GitHub pauses schedules when a public repository has no commits for 60 days. Any commit, or re-enabling the workflow, restarts them.
+- **Voice failures:** edge-tts relies on an unofficial Microsoft endpoint, which can change or block without notice. Each GitHub run installs the newest 7.x release, which is the usual fix; if it stays down, the voice is the one part to swap (in `shorts/voice.py`).
+- **Scheduled runs stop after 60 days:** GitHub pauses schedules when a repository has no commits for 60 days. Each run re-enables its own workflow to reset that timer, so this should not happen while runs keep going.
 - **Monetisation:** YouTube can decline to monetise mass-produced or templated channels. Uploading is allowed, but earning is not guaranteed. Keeping the rate low and adding original commentary now and then helps.

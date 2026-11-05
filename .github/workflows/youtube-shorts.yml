@@ -29,6 +29,7 @@ concurrency:
 
 permissions:
   contents: read
+  actions: write # Lets each run reset GitHub's 60-day inactivity timer on its own schedule.
 
 jobs:
   short:
@@ -55,6 +56,12 @@ jobs:
       ARTICLE_URL: ${{ inputs.url }}
       DRY_RUN: ${{ inputs.dry_run }}
     steps:
+      - name: Keep the schedule alive
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        working-directory: .
+        run: gh api -X PUT "repos/${{ github.repository }}/actions/workflows/youtube-shorts.yml/enable"
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:

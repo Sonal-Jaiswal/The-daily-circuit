@@ -17,6 +17,9 @@ from .config import USER_AGENT, site_url
 MARKET_CATEGORIES = {"Indian Markets", "IPO"}
 # Fine for the archive, but nobody wants to watch them: data releases and administrative notices.
 ROUTINE = re.compile(r"money market operations|treasury bills?|\bt-bills?\b|auction results?|\bRTI\b|inspection findings|cancels? registrations?", re.I)
+# Claims of wrongdoing about named people or companies stay on the site, where sources sit beside them.
+# A Short goes out with no editor looking at it, so these are never turned into video.
+ACCUSATION = re.compile(r"investigat|probe|adjudicat|front-running|insider trading|show[- ]cause|\bSCN\b|alleg|accus|lawsuit|\bsued?\b|\bsues\b|fraud|\bscams?\b|penalt|\bfined?\b|debar|\bbans?\b|\bbars?\b|misconduct|violat|deepfake", re.I)
 
 
 @dataclass
@@ -92,7 +95,7 @@ def choose_item(items: list[FeedItem], done_urls: list[str], max_age_hours: int,
     now = now or datetime.now(timezone.utc)
     cutoff = now - timedelta(hours=max_age_hours)
     done = {_norm(u) for u in done_urls}
-    fresh = [i for i in items if i.published >= cutoff and _norm(i.url) not in done and not ROUTINE.search(i.title)]
+    fresh = [i for i in items if i.published >= cutoff and _norm(i.url) not in done and not ROUTINE.search(i.title) and not ACCUSATION.search(i.title)]
     if not fresh:
         return None
     last_desk = None

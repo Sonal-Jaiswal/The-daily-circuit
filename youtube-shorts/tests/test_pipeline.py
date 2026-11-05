@@ -54,6 +54,17 @@ class ChooseItem(unittest.TestCase):
         news = FeedItem("SEBI Revises Currency Derivatives Limits", "https://aiblog.fun/markets/n", "Indian Markets", NOW - timedelta(hours=2))
         self.assertEqual(source.choose_item([routine, news], [], 72, NOW).url, "https://aiblog.fun/markets/n")
 
+    def test_skips_accusations_against_named_parties(self):
+        accusation = FeedItem("SEBI Investigates Som Distilleries And Key Officials", "https://aiblog.fun/markets/a", "Indian Markets", NOW)
+        news = FeedItem("SEBI Relaxes Digital KYC Norms", "https://aiblog.fun/markets/n", "Indian Markets", NOW - timedelta(hours=2))
+        self.assertEqual(source.choose_item([accusation, news], [], 72, NOW).url, "https://aiblog.fun/markets/n")
+
+    def test_accusation_filter_matches_whole_words(self):
+        for title in ("Regulator fined the broker", "Founder sued by investors", "SEBI bars trader", "Company faces SCN"):
+            self.assertTrue(source.ACCUSATION.search(title), title)
+        for title in ("SEBI issued a circular", "OpenAI refined its model", "New issue of bonds", "Barclays opens a desk"):
+            self.assertFalse(source.ACCUSATION.search(title), title)
+
     def test_alternates_desks(self):
         items = [item("https://aiblog.fun/ai/new"), item("https://aiblog.fun/markets/m", "Indian Markets", 5)]
         self.assertEqual(source.choose_item(items, ["https://aiblog.fun/ai/old"], 72, NOW).url, "https://aiblog.fun/markets/m")
