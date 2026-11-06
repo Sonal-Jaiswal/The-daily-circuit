@@ -81,6 +81,7 @@ def scene_images(subjects: list[str], article: Article) -> tuple[list[Image.Imag
             images.append(_cloudflare(photo_prompt(subject), account, token, model))
             generated += 1
         except Exception as error:
-            print(f"  image generation failed, using the fallback: {type(error).__name__}")
+            status = getattr(getattr(error, "response", None), "status_code", "")
+            print(f"  image generation failed, using the fallback: {type(error).__name__} {status}")
             images.append(fallback)
     return images, f"{model} ({generated}/{len(subjects)})"

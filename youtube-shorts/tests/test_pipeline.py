@@ -152,6 +152,19 @@ class ScriptChecks(unittest.TestCase):
         self.assertEqual(result.author, "key-facts")
         self.assertEqual(len(checks), 2)  # One retry with feedback, then give up on this provider.
 
+    def test_only_three_models_try_to_write_a_story(self):
+        calls = []
+
+        def make(name):
+            def call(_prompt):
+                calls.append(name)
+                return "not json"
+            return (name, call)
+
+        with mock.patch.object(script, "_providers", return_value=[make(n) for n in "abcd"]):
+            script.write_script(article())
+        self.assertEqual(calls, ["a", "b", "c"])
+
     def test_rejection_reasons_are_sent_back_to_the_writer(self):
         import json
 
