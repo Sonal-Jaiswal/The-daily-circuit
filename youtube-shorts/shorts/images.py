@@ -4,6 +4,7 @@ from __future__ import annotations
 import base64
 import io
 import re
+import time
 
 import requests
 from PIL import Image
@@ -11,6 +12,7 @@ from PIL import Image
 from .config import env
 from .source import Article, fetch_bytes
 
+RATE_LIMIT_RETRIES = 2
 GRADIENTS = {"ai": ((16, 20, 58), (47, 58, 143)), "markets": ((58, 36, 8), (135, 89, 10))}
 
 
@@ -38,13 +40,17 @@ def photo_prompt(subject: str) -> str:
 
 
 def _cloudflare(prompt: str, account: str, token: str, model: str) -> Image.Image:
-    res = requests.post(
-        f"https://api.cloudflare.com/client/v4/accounts/{account}/ai/run/{model}",
-        headers={"Authorization": f"Bearer {token}"},
-        # The REST schema rejects `seed`; 8 steps is the maximum and the most detailed.
-        json={"prompt": prompt, "steps": 8},
-        timeout=90,
-    )
+    for attempt in range(RATE_LIMIT_RETRIES + 1):
+        res = requests.post(
+            f"https://api.cloudflare.com/client/v4/accounts/{account}/ai/run/{model}",
+            headers={"Authorization": f"Bearer {token}"},
+            # The REST schema rejects `seed`; 8 steps is the maximum and the most detailed.
+            json={"prompt": prompt, "steps": 8},
+            timeout=90,
+        )
+        if res.status_code != 429 or attempt == RATE_LIMIT_RETRIES:
+            break
+        time.sleep(30 * (attempt + 1))
     res.raise_for_status()
     body = res.json()
     encoded = body.get("result", {}).get("image") or body.get("image")
@@ -81,6 +87,8 @@ def scene_images(subjects: list[str], article: Article) -> tuple[list[Image.Imag
             images.append(_cloudflare(photo_prompt(subject), account, token, model))
             generated += 1
         except Exception as error:
-            print(f"  image generation failed, using the fallback: {type(error).__name__}")
+            response = getattr(error, "response", None)
+            detail = f"{response.status_code} {response.text[:200]}" if response is not None else ""
+            print(f"  image generation failed, using the fallback: {type(error).__name__} {detail}")
             images.append(fallback)
     return images, f"{model} ({generated}/{len(subjects)})"

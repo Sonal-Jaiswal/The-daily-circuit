@@ -13,6 +13,7 @@ from .source import Article, clean_text
 
 MIN_WORDS, MAX_WORDS = 35, 80
 MAX_FIGURES = 2  # Viewers remember a story, not a list of numbers.
+MAX_WRITERS = 3  # Free quotas: if three models cannot make this story work, try another story.
 MAX_SENTENCE_WORDS = 20  # Long sentences are what make narration sound read out.
 ADVICE = re.compile(r"\b(should|must|better) (buy|sell|invest|hold)\b|\b(buy now|sell now|invest now|sure[- ]shot|multibagger|guaranteed returns?|target price)\b", re.I)
 NUMBER = re.compile(r"\d[\d,]*(?:\.\d+)?")
@@ -155,6 +156,10 @@ def _openai_compat(prompt: str, base_url: str, key: str, model: str) -> str:
     return res.json()["choices"][0]["message"]["content"]
 
 
+def has_providers() -> bool:
+    return bool(_providers())
+
+
 def _providers() -> list[tuple[str, callable]]:
     """Only free tiers, in the same order the newsroom prefers them. Providers without a key are skipped."""
     providers: list[tuple[str, callable]] = []
@@ -188,13 +193,17 @@ def _fact_check_prompt(scenes: list[Scene], headline: str, article: Article) -> 
     script = {"headline": headline, "banners": [s.banner for s in scenes], "narration": [s.narration for s in scenes]}
     return f"""Fact-check a short news video script against its source. Nothing else may be assumed.
 
-Be strict: this video is published with no human editor. Go through the script claim by claim and, for each one, look for the sentence in the source that supports it. List a claim as unsupported if:
-- no source sentence says it, even if it seems a reasonable inference or common sense;
-- it adds a benefit, effect on people, cause or prediction;
+This video is published with no human editor, so catch anything that would mislead a viewer, and only that. List a claim as unsupported if:
+- the fact is not in the source, even if it seems a reasonable inference;
+- it adds a benefit, effect on people, cause or prediction the source does not give;
 - it is firmer than the source, for example the source says "potentially" or "could" and the script says it does;
-- it is wider than the source, for example it says "you" or "anyone" where the source limits who it applies to;
-- it promises something absolute, such as "never", "no more", "won't need to" or "anymore", that the source does not state.
-Catchy wording is fine if the fact underneath is in the source.
+- it promises more than the source, for example "you'll never need to mail anything" when the source does not say so.
+
+Do not object to any of these, which are normal plain-English retelling:
+- Simplifying official terms into everyday words, when the meaning stays the same. "Non-resident clients" can be "people living abroad", and a removed requirement can be "you no longer have to".
+- Speaking to the viewer as "you".
+- Leaving out a condition or detail, as long as the main limit on who it applies to is stated somewhere in the script.
+- Catchy wording, when the fact underneath is in the source.
 
 Reply with only this JSON:
 {{"unsupported": ["the claim, and why", "..."]}}
@@ -225,7 +234,7 @@ def _fact_check(scenes: list[Scene], headline: str, article: Article, writer: st
 def write_script(article: Article) -> Script:
     prompt = _prompt(article)
     providers = _providers()
-    for name, call in providers:
+    for name, call in providers[:MAX_WRITERS]:
         feedback = ""
         for _attempt in range(2):
             try:
@@ -246,7 +255,7 @@ def write_script(article: Article) -> Script:
                 return Script(scenes, name, headline)
             print(f"  {name} draft rejected: {'; '.join(issues)[:400]}")
             feedback = "\n\nYour previous draft was rejected for these reasons. Fix them:\n- " + "\n- ".join(issues)
-    print("  using the article's key facts as the script")
+    print("  no draft passed; falling back to the article's key facts")
     return Script(_from_key_facts(article), "key-facts", article.title)
 
 

@@ -152,6 +152,19 @@ class ScriptChecks(unittest.TestCase):
         self.assertEqual(result.author, "key-facts")
         self.assertEqual(len(checks), 2)  # One retry with feedback, then give up on this provider.
 
+    def test_only_three_models_try_to_write_a_story(self):
+        calls = []
+
+        def make(name):
+            def call(_prompt):
+                calls.append(name)
+                return "not json"
+            return (name, call)
+
+        with mock.patch.object(script, "_providers", return_value=[make(n) for n in "abcd"]):
+            script.write_script(article())
+        self.assertEqual(calls, ["a", "b", "c"])
+
     def test_rejection_reasons_are_sent_back_to_the_writer(self):
         import json
 
@@ -251,6 +264,15 @@ class Images(unittest.TestCase):
             result, made_by = images.scene_images(["x", "y"], article(hero_url="https://aiblog.fun/api/images/1"))
         self.assertEqual(result[0].getpixel((0, 0)), (255, 0, 0))
         self.assertIn("(0/2)", made_by)
+
+    def test_rate_limited_image_request_waits_and_retries(self):
+        png = io.BytesIO()
+        Image.new("RGB", (8, 8), "blue").save(png, "PNG")
+        limited = mock.Mock(status_code=429)
+        good = mock.Mock(status_code=200, json=lambda: {"result": {"image": base64.b64encode(png.getvalue()).decode()}})
+        with mock.patch.object(images.requests, "post", side_effect=[limited, good]), mock.patch.object(images.time, "sleep") as sleep:
+            self.assertEqual(images._cloudflare("p", "a", "t", "@cf/m").getpixel((0, 0)), (0, 0, 255))
+        sleep.assert_called_once()
 
     def test_generated_image_is_decoded(self):
         png = io.BytesIO()

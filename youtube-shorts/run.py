@@ -19,6 +19,7 @@ from shorts import images, render, script, source, voice, youtube
 from shorts.config import OUTPUT_DIR, env, load_dotenv
 
 OUTRO = "The full story is on A.I. blog dot fun."
+MAX_STORIES = 3
 
 
 def main() -> int:
@@ -42,14 +43,30 @@ def main() -> int:
         desk = "markets" if "/markets/" in args.url or "/ipo/" in args.url else "ai"
         article = source.fetch_article(args.url, desk)
     else:
-        item = script.most_watchable(source.candidates(feed, done, int(env("MAX_ARTICLE_AGE_HOURS", "72"))))
-        if not item:
+        remaining = source.candidates(feed, done, int(env("MAX_ARTICLE_AGE_HOURS", "72")))
+        if not remaining:
             print("Nothing new: every recent story already has a Short.")
             return 0
-        article = source.fetch_article(item.url, item.desk)
-    print(f"Story: {article.title}\n  {article.url}")
-
-    written = script.write_script(article)
+        written = None
+        for _attempt in range(MAX_STORIES):
+            item = script.most_watchable(remaining)
+            if not item:
+                break
+            remaining.remove(item)
+            article = source.fetch_article(item.url, item.desk)
+            print(f"Story: {article.title}\n  {article.url}")
+            written = script.write_script(article)
+            # A read-out list of facts is what nobody wants to watch, so skip it unless there are no models at all.
+            if written.author != "key-facts" or not script.has_providers():
+                break
+            print("  not good enough to post; trying another story")
+            written = None
+        if not written:
+            print("No story produced a script that passed its checks. Skipping this run; the next one tries again.")
+            return 0
+    if args.url:
+        print(f"Story: {article.title}\n  {article.url}")
+        written = script.write_script(article)
     print(f"Script by {written.author}: {sum(len(s.narration.split()) for s in written.scenes)} words, {len(written.scenes)} scenes")
     pictures, made_by = images.scene_images([s.image_subject for s in written.scenes], article)
     print(f"Images: {made_by}")
