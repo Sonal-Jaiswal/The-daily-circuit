@@ -18,7 +18,7 @@ from pathlib import Path
 from shorts import images, render, script, source, voice, youtube
 from shorts.config import OUTPUT_DIR, env, load_dotenv
 
-OUTRO = "Read the full story at A.I. blog dot fun."
+OUTRO = "The full story is on A.I. blog dot fun."
 
 
 def main() -> int:
@@ -37,11 +37,12 @@ def main() -> int:
     token = youtube.access_token() if youtube.has_credentials() else None
     done = youtube.uploaded_article_urls(token) if token else []
 
+    feed = source.fetch_feed()
     if args.url:
         desk = "markets" if "/markets/" in args.url or "/ipo/" in args.url else "ai"
         article = source.fetch_article(args.url, desk)
     else:
-        item = source.choose_item(source.fetch_feed(), done, int(env("MAX_ARTICLE_AGE_HOURS", "72")))
+        item = script.most_watchable(source.candidates(feed, done, int(env("MAX_ARTICLE_AGE_HOURS", "72"))))
         if not item:
             print("Nothing new: every recent story already has a Short.")
             return 0
@@ -57,13 +58,13 @@ def main() -> int:
     out_dir.mkdir(parents=True, exist_ok=True)
     video = out_dir / "short.mp4"
     with tempfile.TemporaryDirectory() as work:
-        audio, spoken = voice.narrate([s.narration for s in written.scenes] + [OUTRO], Path(work))
-        print(f"Voice: {spoken[-1].end:.1f} seconds. Rendering...")
-        render.render_video(pictures, spoken, audio, article.title, article.desk, video)
+        audio, spoken, voiced_by = voice.narrate([s.narration for s in written.scenes] + [OUTRO], Path(work))
+        print(f"Voice: {voiced_by}, {spoken[-1].end:.1f} seconds. Rendering...")
+        render.render_video(pictures, spoken, audio, written.headline, [s.banner for s in written.scenes], source.ticker_headlines(feed, article), article.desk, video)
 
-    metadata = youtube.build_metadata(article, args.privacy)
+    metadata = youtube.build_metadata(article, args.privacy, written.headline)
     (out_dir / "metadata.json").write_text(
-        json.dumps({"youtube": metadata, "script_by": written.author, "images_by": made_by, "narration": [s.narration for s in written.scenes]}, indent=2, ensure_ascii=False)
+        json.dumps({"youtube": metadata, "script_by": written.author, "images_by": made_by, "voice": voiced_by, "headline": written.headline, "banners": [s.banner for s in written.scenes], "narration": [s.narration for s in written.scenes]}, indent=2, ensure_ascii=False)
     )
     print(f"Rendered {video} ({video.stat().st_size / 1e6:.1f} MB) in {time.time() - started:.0f}s")
 

@@ -33,8 +33,8 @@ def article(**overrides):
 
 
 def valid_scenes(text="OpenAI added GIF creation to ChatGPT."):
-    filler = " ".join(["users can edit the frames"] * 12)
-    return [Scene(text, "a"), Scene(filler + ".", "b"), Scene("Users generate more than 4 billion images per week.", "c")]
+    filler = " ".join(["users can edit the frames."] * 8)
+    return [Scene(text, "a"), Scene(filler, "b"), Scene("Users generate more than 4 billion images per week.", "c")]
 
 
 def item(url, desk_category="AI News", age_hours=1):
@@ -82,6 +82,10 @@ class ParseArticle(unittest.TestCase):
         self.assertEqual(parsed.paragraphs, ["Body & detail."])
         self.assertEqual(parsed.hero_url, "https://aiblog.fun/api/images/hero-1")
 
+    def test_the_sites_speculative_analysis_is_left_out(self):
+        page = PAGE.replace("<p>Body &amp; detail.", "<p>Reported fact.</p><p>AI-generated analysis based on the sources below.</p><p>Prices could rise.</p><p>Body &amp; detail.")
+        self.assertEqual(source.parse_article(page, "https://aiblog.fun/markets/x", "markets").paragraphs, ["Reported fact."])
+
     def test_missing_structured_data_is_an_error(self):
         with self.assertRaises(ValueError):
             source.parse_article("<html></html>", "https://aiblog.fun/ai/x", "ai")
@@ -103,8 +107,101 @@ class ScriptChecks(unittest.TestCase):
         scenes = valid_scenes("Investors should buy OpenAI now.")
         self.assertTrue(any("advice" in p for p in script.problems(scenes, article())))
 
+    def test_rejects_too_many_figures(self):
+        rich = article(key_facts=["1 and 2 and 3 are all in the article."])
+        scenes = valid_scenes("OpenAI added 1 and 2 and 3 to ChatGPT.")
+        self.assertTrue(any("figures" in p for p in script.problems(scenes, rich)))
+
+    def test_rejects_invented_figures_on_screen(self):
+        self.assertTrue(any("on-screen figure" in p for p in script.problems(valid_scenes(), article(), "Now used by 900 people")))
+
+    def test_rejects_invented_names_on_screen(self):
+        self.assertTrue(any("on-screen name" in p for p in script.problems(valid_scenes(), article(), "this beats what Anthropic made")))
+
+    def test_title_case_banner_is_not_mistaken_for_names(self):
+        self.assertEqual(script.problems(valid_scenes(), article(), "Your Chats Just Got Weirder"), [])
+
+    def test_rejects_long_on_screen_text(self):
+        self.assertTrue(any("too long" in p for p in script.problems(valid_scenes(), article(), "one two three four five six seven eight nine")))
+
     def test_rejects_wrong_length(self):
         self.assertTrue(script.problems([Scene("Too short.", "a")] * 3, article()))
+
+    def test_rejects_long_sentences(self):
+        scenes = valid_scenes("OpenAI " + "added " * 25 + "GIF creation.")
+        self.assertTrue(any("sentence" in p for p in script.problems(scenes, article())))
+
+    def test_good_draft_is_rejected_when_the_fact_checker_finds_an_invented_claim(self):
+        import json
+
+        draft = json.dumps({"headline": "Your chats just got weirder", "scenes": [{"narration": s.narration, "image_subject": "x", "banner": "b"} for s in valid_scenes()]})
+        checks = []
+
+        def writer(prompt):
+            return draft
+
+        def checker(prompt):
+            checks.append(prompt)
+            return '{"unsupported": ["keeps prices steadier: not in the source"]}'
+
+        def provider(prompt):
+            return checker(prompt) if prompt.startswith("Fact-check") else writer(prompt)
+
+        with mock.patch.object(script, "_providers", return_value=[("fake", provider)]):
+            result = script.write_script(article())
+        self.assertEqual(result.author, "key-facts")
+        self.assertEqual(len(checks), 2)  # One retry with feedback, then give up on this provider.
+
+    def test_rejection_reasons_are_sent_back_to_the_writer(self):
+        import json
+
+        prompts = []
+        good = json.dumps({"scenes": [{"narration": s.narration, "image_subject": "x", "banner": "b"} for s in valid_scenes()]})
+
+        def provider(prompt):
+            if prompt.startswith("Fact-check"):
+                return '{"unsupported": []}'
+            prompts.append(prompt)
+            return '{"scenes": [{"narration": "Too short.", "image_subject": "x"}]}' if len(prompts) == 1 else good
+
+        with mock.patch.object(script, "_providers", return_value=[("fake", provider)]):
+            self.assertEqual(script.write_script(article()).author, "fake")
+        self.assertIn("rejected", prompts[1])
+
+    def test_script_that_nobody_can_fact_check_is_not_used(self):
+        import json
+
+        good = json.dumps({"scenes": [{"narration": s.narration, "image_subject": "x", "banner": "b"} for s in valid_scenes()]})
+
+        def provider(prompt):
+            if prompt.startswith("Fact-check"):
+                raise script.requests.ConnectionError("down")
+            return good
+
+        with mock.patch.object(script, "_providers", return_value=[("fake", provider)]):
+            self.assertEqual(script.write_script(article()).author, "key-facts")
+
+    def test_a_different_model_checks_first(self):
+        used = []
+
+        def make(name):
+            def call(_prompt):
+                used.append(name)
+                return '{"unsupported": []}'
+            return (name, call)
+
+        script._fact_check(valid_scenes(), "h", article(), "a", [make("a"), make("b")])
+        self.assertEqual(used, ["b"])
+
+    def test_most_watchable_uses_the_model_choice_and_falls_back_to_newest(self):
+        items = [item("https://aiblog.fun/ai/a"), item("https://aiblog.fun/ai/b")]
+        with mock.patch.object(script, "_providers", return_value=[("fake", lambda _p: '{"best": 1}')]):
+            self.assertEqual(script.most_watchable(items).url, "https://aiblog.fun/ai/b")
+        with mock.patch.object(script, "_providers", return_value=[("fake", lambda _p: '{"best": 99}')]):
+            self.assertEqual(script.most_watchable(items).url, "https://aiblog.fun/ai/a")
+        with mock.patch.object(script, "_providers", return_value=[]):
+            self.assertEqual(script.most_watchable(items).url, "https://aiblog.fun/ai/a")
+        self.assertIsNone(script.most_watchable([]))
 
     def test_bad_llm_draft_falls_through_to_key_facts(self):
         bad = '{"scenes": [{"narration": "Made up 999 figure.", "image_subject": "x"}]}'
@@ -117,7 +214,8 @@ class ScriptChecks(unittest.TestCase):
         import json
 
         good = "```json\n" + json.dumps({"scenes": [{"narration": s.narration, "image_subject": s.image_subject} for s in valid_scenes()]}) + "\n```"
-        with mock.patch.object(script, "_providers", return_value=[("fake", lambda _p: good)]):
+        provider = lambda p: '{"unsupported": []}' if p.startswith("Fact-check") else good
+        with mock.patch.object(script, "_providers", return_value=[("fake", provider)]):
             self.assertEqual(script.write_script(article()).author, "fake")
 
     def test_llm_text_is_normalised_for_the_caption_font(self):
@@ -125,7 +223,8 @@ class ScriptChecks(unittest.TestCase):
 
         scenes = [{"narration": s.narration, "image_subject": s.image_subject} for s in valid_scenes()]
         scenes[1]["narration"] += " Frame\u2011by\u2011frame."
-        with mock.patch.object(script, "_providers", return_value=[("fake", lambda _p: json.dumps({"scenes": scenes}))]):
+        provider = lambda p: '{"unsupported": []}' if p.startswith("Fact-check") else json.dumps({"scenes": scenes})
+        with mock.patch.object(script, "_providers", return_value=[("fake", provider)]):
             self.assertIn("Frame-by-frame", script.write_script(article()).scenes[1].narration)
 
     def test_only_free_openrouter_models_are_called(self):
@@ -164,6 +263,31 @@ class Images(unittest.TestCase):
 
 
 class Voice(unittest.TestCase):
+    def test_align_uses_the_written_words_on_the_heard_clock(self):
+        heard = [voice.Word("chat", 0.0, 0.5), voice.Word("GPT", 0.5, 1.0), voice.Word("makes", 1.0, 1.5), voice.Word("gifts", 1.5, 2.0), voice.Word("now", 2.0, 2.5)]
+        words = voice.align(["ChatGPT", "makes", "GIFs", "now."], heard, 3.0)
+        self.assertEqual([w.text for w in words], ["ChatGPT", "makes", "GIFs", "now."])
+        self.assertEqual(words[1].start, 1.0)
+        self.assertEqual(words[3].start, 2.0)
+        self.assertTrue(words[1].start < words[2].start < words[3].start)
+
+    def test_align_spreads_evenly_with_no_transcript(self):
+        words = voice.align(["a", "b", "c"], [], 3.0)
+        self.assertEqual([w.start for w in words], [0.75, 1.5, 2.25])
+
+    def test_scenes_split_on_the_script_lines_and_cover_the_whole_audio(self):
+        lines = ["One two.", "Three SEBI."]
+        words = voice.align("One two. Three Sebi.".split(), [], 4.0)
+        scenes = voice.scenes_from_words(lines, words, 4.0)
+        self.assertEqual(scenes[0].start, 0.0)
+        self.assertEqual(scenes[-1].end, 4.0)
+        self.assertEqual(scenes[0].end, scenes[1].start)
+        self.assertEqual([w.text for w in scenes[1].words], ["Three", "SEBI"])
+
+    def test_falls_back_to_edge_tts_when_gemini_fails(self):
+        with mock.patch.dict(os.environ, {"GEMINI_API_KEY": "k"}), mock.patch.object(voice, "narrate_gemini", side_effect=RuntimeError("down")), mock.patch.object(voice, "narrate_edge", return_value=("a", ["s"])):
+            self.assertEqual(voice.narrate(["x"], Path("."))[2], "edge-tts")
+
     def test_sebi_is_respoken_and_restored_in_captions(self):
         self.assertEqual(voice._speakable("SEBI's rule"), "Sebi's rule")
         self.assertEqual(voice.displayable("Sebi’s"), "SEBI’s")
@@ -171,6 +295,9 @@ class Voice(unittest.TestCase):
 
 
 class Metadata(unittest.TestCase):
+    def test_catchy_headline_becomes_the_title(self):
+        self.assertTrue(youtube.build_metadata(article(), "public", "Your chats just got weirder")["snippet"]["title"].startswith("Your chats"))
+
     def test_title_fits_and_keeps_the_shorts_tag(self):
         snippet = youtube.build_metadata(article(title="A <very> long headline " * 10), "public")["snippet"]
         self.assertLessEqual(len(snippet["title"]), 100)

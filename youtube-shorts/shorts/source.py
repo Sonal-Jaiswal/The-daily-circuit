@@ -87,8 +87,8 @@ def fetch_feed() -> list[FeedItem]:
     return parse_feed(_get(f"{site_url()}/rss.xml").text)
 
 
-def choose_item(items: list[FeedItem], done_urls: list[str], max_age_hours: int, now: datetime | None = None) -> FeedItem | None:
-    """Newest story worth watching without a Short, preferring the desk that did not get the last one.
+def candidates(items: list[FeedItem], done_urls: list[str], max_age_hours: int, now: datetime | None = None) -> list[FeedItem]:
+    """Stories that may get a Short, newest first, from the desk that did not get the last one if it has any.
 
     `done_urls` is ordered newest upload first.
     """
@@ -96,13 +96,23 @@ def choose_item(items: list[FeedItem], done_urls: list[str], max_age_hours: int,
     cutoff = now - timedelta(hours=max_age_hours)
     done = {_norm(u) for u in done_urls}
     fresh = [i for i in items if i.published >= cutoff and _norm(i.url) not in done and not ROUTINE.search(i.title) and not ACCUSATION.search(i.title)]
-    if not fresh:
-        return None
+    fresh.sort(key=lambda i: i.published, reverse=True)
     last_desk = None
     if done_urls:
         last_desk = "markets" if "/markets/" in done_urls[0] or "/ipo/" in done_urls[0] else "ai"
-    fresh.sort(key=lambda i: i.published, reverse=True)
-    return next((i for i in fresh if i.desk != last_desk), fresh[0])
+    return [i for i in fresh if i.desk != last_desk] or fresh
+
+
+def choose_item(items: list[FeedItem], done_urls: list[str], max_age_hours: int, now: datetime | None = None) -> FeedItem | None:
+    """The newest candidate."""
+    found = candidates(items, done_urls, max_age_hours, now)
+    return found[0] if found else None
+
+
+def ticker_headlines(items: list[FeedItem], current: Article, limit: int = 6) -> list[str]:
+    """Other real stories for the moving strip at the bottom."""
+    others = [i.title for i in items if _norm(i.url) != _norm(current.url) and not ROUTINE.search(i.title) and not ACCUSATION.search(i.title)]
+    return others[:limit]
 
 
 def _norm(url: str) -> str:
@@ -136,6 +146,11 @@ def parse_article(page: str, url: str, desk: str) -> Article:
     body = re.search(r'class="prose-article">(.*?)</div></div>', page, re.S)
     if body:
         paragraphs = [clean_text(p) for p in re.findall(r"<p[^>]*>(.*?)</p>", body.group(1), re.S)]
+        # The closing analysis is the site's own labelled speculation, not reporting a video may state as fact.
+        for index, paragraph in enumerate(paragraphs):
+            if paragraph.startswith("AI-generated analysis"):
+                paragraphs = paragraphs[:index]
+                break
 
     return Article(
         title=clean_text(meta.get("headline", "")),

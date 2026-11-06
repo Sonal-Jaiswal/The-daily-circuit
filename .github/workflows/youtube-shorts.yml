@@ -22,6 +22,10 @@ on:
         description: "Render only, do not upload"
         type: boolean
         default: false
+      voice_samples:
+        description: "Only make voice samples (no video, no upload)"
+        type: boolean
+        default: false
 
 concurrency:
   group: youtube-shorts
@@ -46,6 +50,7 @@ jobs:
       GEMINI_MODEL: ${{ vars.GEMINI_MODEL || 'gemini-3.5-flash-lite' }}
       GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
       GROQ_MODEL: ${{ vars.GROQ_MODEL }}
+      GEMINI_VOICE: ${{ vars.GEMINI_VOICE }}
       OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
       OPENROUTER_MODELS: ${{ vars.OPENROUTER_MODELS || 'nvidia/nemotron-3.5-super-vl:free,xingchen-agi/xing4.0-29b-a4b:free,dots-studio/dots-3-note-preview:free' }}
       CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
@@ -68,7 +73,11 @@ jobs:
           python-version: "3.14"
       - run: pip install -r requirements.txt
       - run: python -m unittest discover -s tests -t .
+      - name: Make voice samples
+        if: ${{ inputs.voice_samples }}
+        run: python voice_samples.py
       - name: Make and publish a Short
+        if: ${{ !inputs.voice_samples }}
         run: |
           args=(--privacy "$PRIVACY")
           [ -n "$ARTICLE_URL" ] && args+=(--url "$ARTICLE_URL")
