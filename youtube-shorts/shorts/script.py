@@ -188,7 +188,13 @@ def _fact_check_prompt(scenes: list[Scene], headline: str, article: Article) -> 
     script = {"headline": headline, "banners": [s.banner for s in scenes], "narration": [s.narration for s in scenes]}
     return f"""Fact-check a short news video script against its source. Nothing else may be assumed.
 
-List every claim in the script that the source does not state or clearly imply. Include added benefits, effects on people, causes, predictions, and anything stated more strongly than the source does. Catchy wording is fine if the fact underneath is in the source.
+Be strict: this video is published with no human editor. Go through the script claim by claim and, for each one, look for the sentence in the source that supports it. List a claim as unsupported if:
+- no source sentence says it, even if it seems a reasonable inference or common sense;
+- it adds a benefit, effect on people, cause or prediction;
+- it is firmer than the source, for example the source says "potentially" or "could" and the script says it does;
+- it is wider than the source, for example it says "you" or "anyone" where the source limits who it applies to;
+- it promises something absolute, such as "never", "no more", "won't need to" or "anymore", that the source does not state.
+Catchy wording is fine if the fact underneath is in the source.
 
 Reply with only this JSON:
 {{"unsupported": ["the claim, and why", "..."]}}

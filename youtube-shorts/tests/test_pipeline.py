@@ -82,6 +82,10 @@ class ParseArticle(unittest.TestCase):
         self.assertEqual(parsed.paragraphs, ["Body & detail."])
         self.assertEqual(parsed.hero_url, "https://aiblog.fun/api/images/hero-1")
 
+    def test_the_sites_speculative_analysis_is_left_out(self):
+        page = PAGE.replace("<p>Body &amp; detail.", "<p>Reported fact.</p><p>AI-generated analysis based on the sources below.</p><p>Prices could rise.</p><p>Body &amp; detail.")
+        self.assertEqual(source.parse_article(page, "https://aiblog.fun/markets/x", "markets").paragraphs, ["Reported fact."])
+
     def test_missing_structured_data_is_an_error(self):
         with self.assertRaises(ValueError):
             source.parse_article("<html></html>", "https://aiblog.fun/ai/x", "ai")

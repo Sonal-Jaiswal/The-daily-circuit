@@ -146,6 +146,11 @@ def parse_article(page: str, url: str, desk: str) -> Article:
     body = re.search(r'class="prose-article">(.*?)</div></div>', page, re.S)
     if body:
         paragraphs = [clean_text(p) for p in re.findall(r"<p[^>]*>(.*?)</p>", body.group(1), re.S)]
+        # The closing analysis is the site's own labelled speculation, not reporting a video may state as fact.
+        for index, paragraph in enumerate(paragraphs):
+            if paragraph.startswith("AI-generated analysis"):
+                paragraphs = paragraphs[:index]
+                break
 
     return Article(
         title=clean_text(meta.get("headline", "")),
