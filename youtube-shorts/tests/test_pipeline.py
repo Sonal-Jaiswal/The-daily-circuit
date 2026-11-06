@@ -265,6 +265,15 @@ class Images(unittest.TestCase):
         self.assertEqual(result[0].getpixel((0, 0)), (255, 0, 0))
         self.assertIn("(0/2)", made_by)
 
+    def test_rate_limited_image_request_waits_and_retries(self):
+        png = io.BytesIO()
+        Image.new("RGB", (8, 8), "blue").save(png, "PNG")
+        limited = mock.Mock(status_code=429)
+        good = mock.Mock(status_code=200, json=lambda: {"result": {"image": base64.b64encode(png.getvalue()).decode()}})
+        with mock.patch.object(images.requests, "post", side_effect=[limited, good]), mock.patch.object(images.time, "sleep") as sleep:
+            self.assertEqual(images._cloudflare("p", "a", "t", "@cf/m").getpixel((0, 0)), (0, 0, 255))
+        sleep.assert_called_once()
+
     def test_generated_image_is_decoded(self):
         png = io.BytesIO()
         Image.new("RGB", (8, 8), "blue").save(png, "PNG")
