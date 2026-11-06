@@ -3,19 +3,21 @@
 Turns stories from [aiblog.fun](https://aiblog.fun) into vertical Shorts and uploads them to YouTube, twice a day, at no cost.
 
 ```
-aiblog.fun RSS + article page     picks the newest story without a Short, alternating AI and markets,
-                                  skipping routine notices and accusations against named parties
-                                  (`ROUTINE` and `ACCUSATION` in shorts/source.py)
+aiblog.fun RSS + article page     newest stories, alternating AI and markets, skipping routine notices and
+                                  accusations against named parties (`ROUTINE`, `ACCUSATION` in shorts/source.py).
+                                  A free model picks the one people would most want to hear.
         ↓
-Script    Gemini → Groq → OpenRouter free models. Every figure and name must appear in the article,
-          otherwise the next provider tries. Last resort: the article's own key facts.
+Script    A 20 to 30 second spoken story, with a headline and banners. Gemini → Groq → OpenRouter free models.
+          Figures and names must appear in the article, and a second model fact-checks every claim.
+          Rejected drafts get one retry. Last resort: a short version from the article's key facts.
         ↓
 Images    Cloudflare Workers AI (FLUX), one per scene, objects and places only.
           Fallback: the article's own image.
         ↓
-Voice     Microsoft neural voice through edge-tts (no key), with word timings
+Voice     Gemini speech, one continuous take, with word timings from Groq Whisper for captions.
+          Fallback: Microsoft's edge-tts (no key).
         ↓
-Video     1080×1920 with slow camera moves, word-by-word captions and an end card (Pillow + ffmpeg)
+Video     1080×1920 news layout: headline, lower-third banners, ticker of real headlines, captions (Pillow + ffmpeg)
         ↓
 Upload    YouTube Data API. AI use is stated on screen and in the description, and the upload
           requests YouTube's altered-content label (check it in YouTube Studio; see below)
@@ -30,7 +32,7 @@ The channel's own upload list is the record of what has been published: each des
 | Scheduling and rendering | GitHub Actions | Unlimited minutes on public repositories | No |
 | Script | Gemini, Groq, OpenRouter `:free` models | Daily free tiers; two Shorts use very little | No |
 | Images | Cloudflare Workers AI | Free daily allocation | No |
-| Voice | edge-tts | No published limit, unofficial | No |
+| Voice | Gemini speech, Groq Whisper for timings; edge-tts as fallback | Daily free tiers; edge-tts is unofficial | No |
 | Upload | YouTube Data API | 100 uploads a day | No |
 
 Paid providers are never called, even when their keys exist. OpenRouter models are only used if the name ends in `:free`.
@@ -72,12 +74,12 @@ Your first upload may need YouTube's phone verification on the channel if the ac
 - **Public or private:** the repository variable `YOUTUBE_PRIVACY` sets what scheduled runs do (`private` or `public`). It defaults to `public` when unset. A private Short still counts as done for its story, so publish it from YouTube Studio if you want it seen.
 - **Stop completely:** Actions → YouTube Shorts → ⋯ → Disable workflow.
 - **Change the schedule:** the `cron` lines in `.github/workflows/youtube-shorts.yml`. Each run makes one Short.
-- **Change the voice:** `TTS_VOICE` (`en-IN-NeerjaNeural`, `en-IN-PrabhatNeural`).
+- **Change the voice:** set the repository variable `GEMINI_VOICE` (default `en-in-commercial-7`). Google's library has 100 Indian English voices; run the workflow with **voice_samples** ticked to hear some.
 
 ## What can go wrong
 
 - **Altered-content label missing:** on the first test upload the API accepted `containsSyntheticMedia: true` but returned no value when read back. Check the video's Altered content setting in YouTube Studio; the on-screen and description disclosures do not depend on it.
 - **`invalid_grant`** in the log: the consent screen is still in Testing, or access was revoked. Fix step 1.3 and run `auth.py --github` again.
-- **Voice failures:** edge-tts relies on an unofficial Microsoft endpoint, which can change or block without notice. Each GitHub run installs the newest 7.x release, which is the usual fix; if it stays down, the voice is the one part to swap (in `shorts/voice.py`).
+- **Fallback voice failures:** edge-tts relies on an unofficial Microsoft endpoint, which can change or block without notice. Each GitHub run installs the newest 7.x release, which is the usual fix; if it stays down, the voice is the one part to swap (in `shorts/voice.py`).
 - **Scheduled runs stop after 60 days:** GitHub pauses schedules when a repository has no commits for 60 days. Each run re-enables its own workflow to reset that timer, so this should not happen while runs keep going.
 - **Monetisation:** YouTube can decline to monetise mass-produced or templated channels. Uploading is allowed, but earning is not guaranteed. Keeping the rate low and adding original commentary now and then helps.

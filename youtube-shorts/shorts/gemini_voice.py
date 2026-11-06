@@ -9,7 +9,7 @@ import requests
 from .config import env
 
 API = "https://generativelanguage.googleapis.com/v1beta"
-DEFAULT_VOICE = "en-in-commercial-8"
+DEFAULT_VOICE = "en-in-commercial-7"
 # Accent comes from the voice itself; Google advises against asking for one in the style.
 STYLE = (
     "A warm, confident young news presenter telling a friend something interesting they just heard. "
